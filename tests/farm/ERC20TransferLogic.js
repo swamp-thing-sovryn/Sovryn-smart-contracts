@@ -96,20 +96,29 @@ describe("ERC20TransferLogic", () => {
 		const amountToTransfer = new BN(50);
 
 		it("fails if account doesn't have reward tokens", async () => {
-			await expectRevert(transferLogic.transferReward(account2, new BN(5), false, { from: account1 }), "invalid transfer");
+			await expectRevert(
+				transferLogic.transferReward(account2, new BN(5), false, { from: account1 }),
+				"SafeERC20: low-level call failed"
+			);
 		});
 
 		it("fails if account didn't approve before", async () => {
 			//send some token1 to account1 to be able to transfer
 			await token1.mint(account1, new BN(10));
-			await expectRevert(transferLogic.transferReward(account2, new BN(5), false, { from: account1 }), "invalid transfer");
+			await expectRevert(
+				transferLogic.transferReward(account2, new BN(5), false, { from: account1 }),
+				"SafeERC20: low-level call failed"
+			);
 		});
 
 		it("fails if invalid address to transfer", async () => {
 			//send some token1 to account1 to be able to transfer
 			await token1.mint(account1, account1InitialBalance);
 			await token1.approve(transferLogic.address, account1InitialBalance, { from: account1 });
-			await expectRevert(transferLogic.transferReward(ZERO_ADDRESS, new BN(5), false, { from: account1 }), "invalid transfer");
+			await expectRevert(
+				transferLogic.transferReward(ZERO_ADDRESS, new BN(5), false, { from: account1 }),
+				"SafeERC20: low-level call failed"
+			);
 		});
 
 		it("should account1 transfer reward to account2", async () => {

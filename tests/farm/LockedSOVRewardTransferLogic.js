@@ -44,12 +44,14 @@ describe("LockedSOVRewardTransferLogic", () => {
 	describe("initialize", () => {
 		it("fails if not an owner or admin", async () => {
 			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
-			await expectRevert(rewardTransferLogic.initialize(SOVToken.address, unlockedImmediatelyPercent, { from: account1 }), "unauthorized");
+			await expectRevert(
+				rewardTransferLogic.initialize(SOVToken.address, unlockedImmediatelyPercent, { from: account1 }),
+				"unauthorized"
+			);
 
 			await rewardTransferLogic.addAdmin(account1);
 			await rewardTransferLogic.initialize(SOVToken.address, unlockedImmediatelyPercent, { from: account1 });
 		});
-
 
 		it("sets the expected values", async () => {
 			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
