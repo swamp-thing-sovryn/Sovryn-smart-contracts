@@ -167,7 +167,10 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 		require(_poolToken != address(0), "Invalid token address");
 		require(poolIdList[_poolToken] == 0, "Token already added");
 
-		// TODO: require all rewards are added as valid reward token
+		uint256 rewardsLength = _rewardTokens.length;
+		for (uint256 i = 0; i < rewardsLength; i++) {
+			require(rewardTokensMap[_rewardTokens[i]].startBlock != 0, "Reward token is not valid");
+		}
 		uint256 pointsLength = _allocationPoints.length;
 		for (uint256 i = 0; i < pointsLength; i++) {
 			require(_allocationPoints[i] > 0, "Invalid allocation point");
@@ -182,7 +185,7 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 		poolIdList[_poolToken] = poolInfoList.length;
 
 		for (uint256 i = 0; i < _rewardTokens.length; i++) {
-			associatePoolToRewardToken(_poolToken, _rewardTokens[i], _allocationPoints[i], _withUpdate);
+			associatePoolToRewardToken(_poolToken, _rewardTokens[i], _allocationPoints[i]);
 		}
 
 		emit PoolTokenAdded(msg.sender, _poolToken, _rewardTokens, _allocationPoints);
@@ -191,8 +194,7 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 	function associatePoolToRewardToken(
 		address _poolToken,
 		address _rewardToken,
-		uint96 _allocationPoint,
-		bool _withUpdate // FIXME: Think about how to implement this
+		uint96 _allocationPoint
 	) internal {
 		uint256 poolId = _getPoolId(_poolToken);
 		// Pool checks
