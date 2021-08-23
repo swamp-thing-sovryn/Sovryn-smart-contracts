@@ -45,10 +45,10 @@ def main():
         sovTokenAddress = sovToken.address
         print("SOV token address: ", sovTokenAddress)
 
-        print("Deploying test token")
-        testToken = acct.deploy(TestToken, "cSOV1", "cSOV1", 18, 1e26)
-        testTokenAddress = testToken.address
-        print("test token address: ", testTokenAddress)
+        #print("Deploying test token")
+        #testToken = acct.deploy(TestToken, "cSOV1", "cSOV1", 18, 1e26)
+        #testTokenAddress = testToken.address
+        #print("test token address: ", testTokenAddress)
     
     if thisNetwork == "testnet":
         SOVToken = Contract.from_abi("SOV", address = contracts['SOV'], abi=TestToken.abi, owner = acct)
@@ -83,8 +83,8 @@ def main():
     lockedSOV = acct.deploy(LockedSOV, sovTokenAddress, contracts['VestingRegistry3'], 1, 10, [contracts['multisig']])
     SOVRewardTransferLogic = acct.deploy(LockedSOVRewardTransferLogic)
     SOVRewardTransferLogic.initialize(lockedSOV.address,unlockedImmediatelyPercent)
-    transferLogic = acct.deploy(ERC20TransferLogic)
-    transferLogic.initialize(testTokenAddress)
+    #transferLogic = acct.deploy(ERC20TransferLogic)
+    #transferLogic.initialize(testTokenAddress)
 
     # TODO Dummy pool token should be ERC20
     liquidityMiningConfigToken = acct.deploy(LiquidityMiningConfigToken)
@@ -101,16 +101,16 @@ def main():
     
     #add reward tokens
     liquidityMining.addRewardToken(sovTokenAddress,rewardTokensPerBlock,startDelayBlocks,SOVRewardTransferLogic.address)
-    liquidityMining.addRewardToken(testTokenAddress,rewardTokensPerBlock,startDelayBlocks,transferLogic.address)
+    #liquidityMining.addRewardToken(testTokenAddress,rewardTokensPerBlock,startDelayBlocks,transferLogic.address)
 
     #add pools
     rewardTokensPool = [0] * len(poolTokens)
     rewardTokensPool[0] = [sovTokenAddress]
-    rewardTokensPool[1] = [sovTokenAddress,testTokenAddress]
+    rewardTokensPool[1] = [sovTokenAddress]
 
     allocationPointsPool = [0] * len(poolTokens)
     allocationPointsPool[0] = [ALLOCATION_POINT_SOV_BTC]
-    allocationPointsPool[1] = [MAX_ALLOCATION_POINT - ALLOCATION_POINT_SOV_BTC,ALLOCATION_POINT_SOV_BTC]
+    allocationPointsPool[1] = [MAX_ALLOCATION_POINT - ALLOCATION_POINT_SOV_BTC]
     
     for i in range(0,len(poolTokens)):
         print('adding pool', i)
