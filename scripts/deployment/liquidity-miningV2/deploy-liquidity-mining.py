@@ -39,6 +39,7 @@ def main():
     
     # == LiquidityMining ===================================================================================================================
     if thisNetwork == "development":
+        #deploy reward tokens
         print("Deploying SOV token")
         sovToken = acct.deploy(SOV, 10**26)
         sovTokenAddress = sovToken.address
@@ -82,6 +83,8 @@ def main():
     lockedSOV = acct.deploy(LockedSOV, sovTokenAddress, contracts['VestingRegistry3'], 1, 10, [contracts['multisig']])
     SOVRewardTransferLogic = acct.deploy(LockedSOVRewardTransferLogic)
     SOVRewardTransferLogic.initialize(lockedSOV.address,unlockedImmediatelyPercent)
+    transferLogic = acct.deploy(ERC20TransferLogic)
+    transferLogic.initialize(testTokenAddress)
 
     # TODO Dummy pool token should be ERC20
     liquidityMiningConfigToken = acct.deploy(LiquidityMiningConfigToken)
@@ -95,9 +98,23 @@ def main():
     allocationPoints = [ALLOCATION_POINT_SOV_BTC, MAX_ALLOCATION_POINT - ALLOCATION_POINT_SOV_BTC]
     # token weight = allocationPoint / SUM of allocationPoints for all pool tokens
     withUpdate = False # can be False if we adding pool tokens before mining started
+    
+    #add reward tokens
+    liquidityMining.addRewardToken(sovTokenAddress,rewardTokensPerBlock,startDelayBlocks,SOVRewardTransferLogic.address)
+    liquidityMining.addRewardToken(testTokenAddress,rewardTokensPerBlock,startDelayBlocks,transferLogic.address)
+
+    #add pools
+    rewardTokensPool = [0] * len(poolTokens)
+    rewardTokensPool[0] = [sovTokenAddress]
+    rewardTokensPool[1] = [sovTokenAddress,testTokenAddress]
+
+    allocationPointsPool = [0] * len(poolTokens)
+    allocationPointsPool[0] = [ALLOCATION_POINT_SOV_BTC]
+    allocationPointsPool[1] = [MAX_ALLOCATION_POINT - ALLOCATION_POINT_SOV_BTC,ALLOCATION_POINT_SOV_BTC]
+    
     for i in range(0,len(poolTokens)):
         print('adding pool', i)
-        #liquidityMining.add(poolTokens[i], [sovTokenAddress], allocationPoints[i], withUpdate)
+        liquidityMining.add(poolTokens[i], rewardTokensPool[i], allocationPointsPool[i], withUpdate)
 
     liquidityMiningProxy.addAdmin(multisig)
     liquidityMiningProxy.setProxyOwner(multisig)
