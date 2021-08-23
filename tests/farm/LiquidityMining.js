@@ -279,6 +279,10 @@ describe("LiquidityMining", () => {
 			expect(poolRewardInfo1.lastRewardBlock).bignumber.equal(poolRewardInfo2.lastRewardBlock);
 		});
 
+		it("fails if the reward token is not valid", async () => {
+			await expectRevert(liquidityMining.add(token1.address, [token2.address], [new BN(0)], false), "Reward token is not valid");
+		});
+
 		it("fails if the 0 allocation point is passed", async () => {
 			await expectRevert(liquidityMining.add(token1.address, [SOVToken.address], [new BN(0)], false), "Invalid allocation point");
 		});
