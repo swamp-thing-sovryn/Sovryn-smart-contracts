@@ -15,9 +15,6 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 	/* Constants */
 
 	uint256 public constant PRECISION = 1e12;
-	// Bonus multiplier for early liquidity providers.
-	// During bonus period each passed block will be calculated like N passed blocks, where N = BONUS_MULTIPLIER
-	uint256 public constant BONUS_BLOCK_MULTIPLIER = 10;
 
 	uint256 public constant SECONDS_PER_BLOCK = 30;
 
@@ -537,7 +534,7 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 
 		for (uint256 i = 0; i < rewardTokensLength; i++) {
 			address rewardTokenAddress = pool.rewardTokens[i];
-			_updateRewardDebt(poolId, pool, rewardTokenAddress, user);
+			_updateRewardDebt(poolId, rewardTokenAddress, user);
 		}
 		emit Deposit(userAddress, _poolToken, _amount);
 	}
@@ -587,7 +584,7 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 		_updatePoolRewardToken(pool, _poolId, _rewardToken);
 		_updateReward(_poolId, _rewardToken, user);
 		_transferReward(_rewardToken, user, _userAddress, false, true);
-		_updateRewardDebt(_poolId, pool, _rewardToken, user);
+		_updateRewardDebt(_poolId, _rewardToken, user);
 	}
 
 	/**
@@ -649,7 +646,7 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 
 		for (uint256 i = 0; i < rewardTokensLength; i++) {
 			address rewardTokenAddress = pool.rewardTokens[i];
-			_updateRewardDebt(poolId, pool, rewardTokenAddress, user);
+			_updateRewardDebt(poolId, rewardTokenAddress, user);
 		}
 		emit Withdraw(userAddress, _poolToken, _amount);
 	}
@@ -684,7 +681,6 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 
 	function _updateRewardDebt(
 		uint256 poolId,
-		PoolInfo storage pool,
 		address rewardToken,
 		UserInfo storage user
 	) internal {
@@ -759,7 +755,7 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 
 		for (uint256 i = 0; i < rewardTokensLength; i++) {
 			address rewardTokenAddress = pool.rewardTokens[i];
-			_updateRewardDebt(poolId, pool, rewardTokenAddress, user);
+			_updateRewardDebt(poolId, rewardTokenAddress, user);
 		}
 	}
 
