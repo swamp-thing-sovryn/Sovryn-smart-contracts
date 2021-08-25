@@ -3,8 +3,11 @@ pragma solidity 0.5.17;
 import "./IRewardTransferLogic.sol";
 import "./ERC20TransferLogicStorage.sol";
 import "../interfaces/IERC20.sol";
+import "../openzeppelin/SafeERC20.sol";
 
 contract ERC20TransferLogic is IRewardTransferLogic, ERC20TransferLogicStorage {
+	using SafeERC20 for IERC20;
+
 	event TokenAddressUpdated(address _newTokenAddress);
 
 	/**
@@ -33,6 +36,6 @@ contract ERC20TransferLogic is IRewardTransferLogic, ERC20TransferLogicStorage {
 		uint256 _value,
 		bool // it doesn't matter if it's a withdrawal or not
 	) external {
-		token.transferFrom(msg.sender, _to, _value);
+		token.safeTransferFrom(msg.sender, _to, _value);
 	}
 }

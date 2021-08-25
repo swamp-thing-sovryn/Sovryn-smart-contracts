@@ -62,7 +62,8 @@ module.exports = {
 	},
 	networks: {
 		hardhat: {
-			hardfork: process.env.COVERAGE ? 'berlin' : 'london',
+			// hardfork: 'london'
+			// hardfork: process.env.COVERAGE ? 'berlin' : 'london',
 		},
 		rskPublicTestnet: {
 			url: "https://public-node.testnet.rsk.co/",
