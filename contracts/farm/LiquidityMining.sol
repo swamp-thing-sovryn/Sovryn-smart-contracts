@@ -160,18 +160,10 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 		uint96[] calldata _allocationPoints,
 		bool _withUpdate
 	) external onlyAuthorized {
+		require(_rewardTokens.length > 0, "Invalid reward tokens length");
 		require(_rewardTokens.length == _allocationPoints.length, "Invalid allocation points length");
 		require(_poolToken != address(0), "Invalid token address");
 		require(poolIdList[_poolToken] == 0, "Token already added");
-
-		uint256 rewardsLength = _rewardTokens.length;
-		for (uint256 i = 0; i < rewardsLength; i++) {
-			require(rewardTokensMap[_rewardTokens[i]].startBlock != 0, "Reward token is not valid");
-		}
-		uint256 pointsLength = _allocationPoints.length;
-		for (uint256 i = 0; i < pointsLength; i++) {
-			require(_allocationPoints[i] > 0, "Invalid allocation point");
-		}
 
 		if (_withUpdate) {
 			updateAllPools();
@@ -194,9 +186,9 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 		uint96 _allocationPoint
 	) internal {
 		uint256 poolId = _getPoolId(_poolToken);
-		// Pool checks
-		require(poolId >= 0, "Invalid pool id");
-		require(poolId < poolInfoList.length, "Pool id doesn't exist");
+
+		// Allocation point checks
+		require(_allocationPoint > 0, "Invalid allocation point");
 
 		// Reward token checks
 		RewardToken storage rewardToken = rewardTokensMap[_rewardToken];
@@ -304,8 +296,13 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 		if (_from < _rewardToken.startBlock) {
 			_from = _rewardToken.startBlock;
 		}
+
 		if (_rewardToken.endBlock > 0 && _to > _rewardToken.endBlock) {
 			_to = _rewardToken.endBlock;
+		}
+
+		if (_to <= _from) {
+			return 0;
 		}
 
 		return _to.sub(_from);
@@ -544,7 +541,7 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 	 * @param _poolToken the address of pool token
 	 * @param _user the address of user to claim reward from (can be passed only by wrapper contract)
 	 */
-	function claimReward(address _poolToken, address _user) external {
+	function claimRewards(address _poolToken, address _user) external {
 		address userAddress = _getUserAddress(_user);
 
 		uint256 poolId = _getPoolId(_poolToken);
