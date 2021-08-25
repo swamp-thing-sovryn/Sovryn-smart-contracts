@@ -358,14 +358,15 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 		PoolInfo storage pool = poolInfoList[poolId];
 		uint256 start = block.number;
 		uint256 end = start.add(_duration.div(SECONDS_PER_BLOCK));
-		(, uint256 accumulatedRewardPerShare) = _getPoolAccumulatedReward(
-			pool,
-			_amount,
-			rewardTokensMap[_rewardToken],
-			poolInfoRewardTokensMap[poolId][_rewardToken],
-			start,
-			end
-		);
+		(, uint256 accumulatedRewardPerShare) =
+			_getPoolAccumulatedReward(
+				pool,
+				_amount,
+				rewardTokensMap[_rewardToken],
+				poolInfoRewardTokensMap[poolId][_rewardToken],
+				start,
+				end
+			);
 		return _amount.mul(accumulatedRewardPerShare).div(PRECISION);
 	}
 
@@ -458,11 +459,10 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 		uint256 _endBlock
 	) internal view returns (uint256, uint256) {
 		uint256 passedBlocks = _getPassedBlocks(_rewardToken, _startBlock, _endBlock);
-		uint256 accumulatedReward = passedBlocks
-			.mul(_rewardToken.rewardTokensPerBlock)
-			.mul(PRECISION)
-			.mul(_poolRewardToken.allocationPoint)
-			.div(_rewardToken.totalAllocationPoint);
+		uint256 accumulatedReward =
+			passedBlocks.mul(_rewardToken.rewardTokensPerBlock).mul(PRECISION).mul(_poolRewardToken.allocationPoint).div(
+				_rewardToken.totalAllocationPoint
+			);
 
 		uint256 poolTokenBalance = _pool.poolToken.balanceOf(address(this));
 		poolTokenBalance = poolTokenBalance.add(_additionalAmount);
@@ -667,11 +667,10 @@ contract LiquidityMining is ILiquidityMining, LiquidityMiningStorage {
 		//update user accumulated reward
 		if (user.amount > 0) {
 			//add reward for the previous amount of deposited tokens
-			uint256 accumulatedReward = user
-				.amount
-				.mul(poolInfoRewardTokensMap[_poolId][_rewardTokenAddress].accumulatedRewardPerShare)
-				.div(PRECISION)
-				.sub(reward.rewardDebt);
+			uint256 accumulatedReward =
+				user.amount.mul(poolInfoRewardTokensMap[_poolId][_rewardTokenAddress].accumulatedRewardPerShare).div(PRECISION).sub(
+					reward.rewardDebt
+				);
 			reward.accumulatedReward = reward.accumulatedReward.add(accumulatedReward);
 		}
 	}
