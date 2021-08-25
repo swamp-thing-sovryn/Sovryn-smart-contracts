@@ -76,5 +76,4 @@ contract LiquidityMiningStorage is AdminRole {
 
 	// Info of each user that stakes LP tokens.
 	mapping(uint256 => mapping(address => UserInfo)) public userInfoMap;
-
 }
