@@ -38,22 +38,6 @@ def main():
     balanceBefore = acct.balance()
     
     # == LiquidityMining ===================================================================================================================
-    if thisNetwork == "development":
-        #deploy reward tokens
-        print("Deploying SOV token")
-        sovToken = acct.deploy(SOV, 10**26)
-        sovTokenAddress = sovToken.address
-        print("SOV token address: ", sovTokenAddress)
-
-        #print("Deploying test token")
-        #testToken = acct.deploy(TestToken, "cSOV1", "cSOV1", 18, 1e26)
-        #testTokenAddress = testToken.address
-        #print("test token address: ", testTokenAddress)
-    
-    if thisNetwork == "testnet":
-        SOVToken = Contract.from_abi("SOV", address = contracts['SOV'], abi=TestToken.abi, owner = acct)
-        sovTokenAddress = SOVToken.address
-    
 
     liquidityMiningLogic = acct.deploy(LiquidityMining)
     liquidityMiningProxy = acct.deploy(LiquidityMiningProxy)
@@ -80,33 +64,29 @@ def main():
     liquidityMining.initialize(wrapper)
 
     #Reward transfer logic
-    lockedSOV = acct.deploy(LockedSOV, sovTokenAddress, contracts['VestingRegistry3'], 1, 10, [contracts['multisig']])
+
     SOVRewardTransferLogic = acct.deploy(LockedSOVRewardTransferLogic)
-    SOVRewardTransferLogic.initialize(lockedSOV.address,unlockedImmediatelyPercent)
-    #transferLogic = acct.deploy(ERC20TransferLogic)
-    #transferLogic.initialize(testTokenAddress)
+    SOVRewardTransferLogic.initialize(contracts['LockedSOV'],unlockedImmediatelyPercent)
 
     # TODO Dummy pool token should be ERC20
-    liquidityMiningConfigToken = acct.deploy(LiquidityMiningConfigToken)
+    #liquidityMiningConfigToken = acct.deploy(LiquidityMiningConfigToken)
 
     # TODO prepare pool tokens list
-    poolTokens = [contracts['(WR)BTC/SOV'], liquidityMiningConfigToken.address]
+    poolTokens = [contracts['(WR)BTC/SOV'], contracts['LiquidityMiningConfigToken']]
     # we need to multiply by 1000 to have 100 M
     MAX_ALLOCATION_POINT = 100000 * 1000 # 100 M
     # we don't need 10**18 here, it's just a proportion between tokens
     ALLOCATION_POINT_SOV_BTC = 40000 # 40 K
-    allocationPoints = [ALLOCATION_POINT_SOV_BTC, MAX_ALLOCATION_POINT - ALLOCATION_POINT_SOV_BTC]
     # token weight = allocationPoint / SUM of allocationPoints for all pool tokens
     withUpdate = False # can be False if we adding pool tokens before mining started
     
     #add reward tokens
-    liquidityMining.addRewardToken(sovTokenAddress,rewardTokensPerBlock,startDelayBlocks,SOVRewardTransferLogic.address)
-    #liquidityMining.addRewardToken(testTokenAddress,rewardTokensPerBlock,startDelayBlocks,transferLogic.address)
+    liquidityMining.addRewardToken(contracts['SOV'],rewardTokensPerBlock,startDelayBlocks,SOVRewardTransferLogic.address)
 
     #add pools
     rewardTokensPool = [0] * len(poolTokens)
-    rewardTokensPool[0] = [sovTokenAddress]
-    rewardTokensPool[1] = [sovTokenAddress]
+    rewardTokensPool[0] = [contracts['SOV']]
+    rewardTokensPool[1] = [contracts['SOV']]
 
     allocationPointsPool = [0] * len(poolTokens)
     allocationPointsPool[0] = [ALLOCATION_POINT_SOV_BTC]
@@ -120,9 +100,6 @@ def main():
     liquidityMiningProxy.setProxyOwner(multisig)
     liquidityMining.transferOwnership(multisig)
 
-    if thisNetwork == "testnet":
-        print('transferring SOV')
-        SOVToken.transfer(liquidityMiningProxy.address, 50000e18)
 
     print("deployment cost:")
     print((balanceBefore - acct.balance()) / 10**18)
