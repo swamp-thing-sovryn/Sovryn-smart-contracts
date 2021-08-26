@@ -1,16 +1,16 @@
 pragma solidity 0.5.17;
 
-import "../farm/LiquidityMining.sol";
+import "../farm/LiquidityMiningV2.sol";
 
-contract RBTCWrapperProxyMockup {
-	LiquidityMining public liquidityMining;
+contract RBTCWrapperProxyMockupV2 {
+	LiquidityMiningV2 public liquidityMining;
 
-	constructor(LiquidityMining _liquidityMining) public {
+	constructor(LiquidityMiningV2 _liquidityMining) public {
 		liquidityMining = _liquidityMining;
 	}
 
 	function claimReward(address _poolToken) public {
-		liquidityMining.claimReward(_poolToken, msg.sender);
+		liquidityMining.claimRewards(_poolToken, msg.sender);
 	}
 
 	function claimRewardFromAllPools() public {
