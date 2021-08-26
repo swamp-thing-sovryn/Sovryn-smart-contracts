@@ -23,14 +23,16 @@ const PriceFeedsLocal = artifacts.require("PriceFeedsLocal");
 const TestSovrynSwap = artifacts.require("TestSovrynSwap");
 const SwapsImplLocal = artifacts.require("SwapsImplLocal");
 
-const LiquidityMiningLogic = artifacts.require("LiquidityMiningMockup");
-const LiquidityMiningProxy = artifacts.require("LiquidityMiningProxy");
+const LiquidityMiningLogic = artifacts.require("LiquidityMiningMockupV2");
+const LiquidityMiningProxy = artifacts.require("LiquidityMiningProxyV2");
 const LockedSOV = artifacts.require("LockedSOV");
+const LockedSOVRewardTransferLogic = artifacts.require("LockedSOVRewardTransferLogic");
 
 const TOTAL_SUPPLY = web3.utils.toWei("1000", "ether");
 
 //const { lend_to_the_pool, cash_out_from_the_pool, cash_out_from_the_pool_more_of_lender_balance_should_not_fail } = require("./helpers");
 const { lend_to_the_pool, cash_out_from_the_pool, cash_out_from_the_pool_uint256_max_should_withdraw_total_balance } = require("./helpers");
+const { ZERO_ADDRESS } = require("@openzeppelin/test-helpers/src/constants");
 
 const wei = web3.utils.toWei;
 
@@ -43,7 +45,7 @@ contract("LoanTokenLogicLM", (accounts) => {
 	let underlyingToken, testWrbtc;
 	let sovryn, loanToken, loanTokenWRBTC;
 	let liquidityMining;
-	let lockedSOVAdmins, lockedSOV;
+	let rewardTransferLogic, lockedSOVAdmins, lockedSOV;
 
 	before(async () => {
 		[lender, account1, account2, account3, account4, ...accounts] = accounts;
@@ -53,8 +55,10 @@ contract("LoanTokenLogicLM", (accounts) => {
 
 		await loanToken.setLiquidityMiningAddress(liquidityMining.address);
 		await loanTokenWRBTC.setLiquidityMiningAddress(liquidityMining.address);
-		await liquidityMining.add(loanToken.address, 10, false);
-		await liquidityMining.add(loanTokenWRBTC.address, 10, true);
+
+		await liquidityMining.addRewardToken(SOVToken.address, new BN(3), new BN(1), rewardTransferLogic.address);
+		await liquidityMining.add(loanToken.address, [SOVToken.address], [new BN(10)], false);
+		await liquidityMining.add(loanTokenWRBTC.address, [SOVToken.address], [new BN(10)], true);
 	});
 
 	describe("Test lending with liquidity mining", () => {
@@ -179,8 +183,10 @@ contract("LoanTokenLogicLM", (accounts) => {
 		await liquidityMiningProxy.setImplementation(liquidityMiningLogic.address);
 		liquidityMining = await LiquidityMiningLogic.at(liquidityMiningProxy.address);
 
+		rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
+		await rewardTransferLogic.initialize(lockedSOV.address, new BN(1000));
 		//dummy settings
-		await liquidityMining.initialize(SOVToken.address, 10, 1, 1, account1, lockedSOV.address, 0);
+		await liquidityMining.initialize(ZERO_ADDRESS);
 	}
 
 	async function deployProtocol() {
