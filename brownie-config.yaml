@@ -12,7 +12,7 @@ project_structure:
 networks:
   default: development
   development:
-    gas_limit: auto
+    gas_limit: 6800000
     gas_price: 65000000
     reverting_tx_gas_limit: 8000000
     default_contract_owner: true
@@ -28,7 +28,7 @@ networks:
   live:
     cmd_settings:
       port: 443
-    gas_limit: auto
+    gas_limit: 6800000
     gas_price: 65000010 # 25000000000 25 GWEI
     reverting_tx_gas_limit: false
     default_contract_owner: false
