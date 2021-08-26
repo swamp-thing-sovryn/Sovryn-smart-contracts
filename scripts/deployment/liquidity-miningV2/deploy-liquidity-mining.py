@@ -39,10 +39,10 @@ def main():
     
     # == LiquidityMining ===================================================================================================================
 
-    liquidityMiningLogic = acct.deploy(LiquidityMining)
-    liquidityMiningProxy = acct.deploy(LiquidityMiningProxy)
-    liquidityMiningProxy.setImplementation(liquidityMiningLogic.address)
-    liquidityMining = Contract.from_abi("LiquidityMining", address=liquidityMiningProxy.address, abi=LiquidityMining.abi, owner=acct)
+    liquidityMiningLogicV2 = acct.deploy(LiquidityMiningV2)
+    liquidityMiningProxyV2 = acct.deploy(LiquidityMiningProxyV2)
+    liquidityMiningProxyV2.setImplementation(liquidityMiningLogicV2.address)
+    liquidityMiningV2 = Contract.from_abi("LiquidityMiningV2", address=liquidityMiningProxyV2.address, abi=LiquidityMiningV2.abi, owner=acct)
     
     # TODO define values
     # Maximum reward per week: 100M SOV
@@ -61,7 +61,7 @@ def main():
     # 10000 is 100%
     unlockedImmediatelyPercent = 0 # 0%
     
-    liquidityMining.initialize(wrapper)
+    liquidityMiningV2.initialize(wrapper)
 
     #Reward transfer logic
 
@@ -78,7 +78,7 @@ def main():
     withUpdate = False # can be False if we adding pool tokens before mining started
     
     #add reward tokens
-    liquidityMining.addRewardToken(contracts['SOV'],rewardTokensPerBlock,startDelayBlocks,SOVRewardTransferLogic.address)
+    liquidityMiningV2.addRewardToken(contracts['SOV'],rewardTokensPerBlock,startDelayBlocks,SOVRewardTransferLogic.address)
 
     #add pools
     rewardTokensPool = [[contracts['SOV']],[contracts['SOV']]]
@@ -87,11 +87,11 @@ def main():
     
     for i in range(0,len(poolTokens)):
         print('adding pool', i)
-        liquidityMining.add(poolTokens[i], rewardTokensPool[i], allocationPointsPool[i], withUpdate)
+        liquidityMiningV2.add(poolTokens[i], rewardTokensPool[i], allocationPointsPool[i], withUpdate)
 
-    liquidityMiningProxy.addAdmin(multisig)
-    liquidityMiningProxy.setProxyOwner(multisig)
-    liquidityMining.transferOwnership(multisig)
+    liquidityMiningProxyV2.addAdmin(multisig)
+    liquidityMiningProxyV2.setProxyOwner(multisig)
+    liquidityMiningV2.transferOwnership(multisig)
 
 
     print("deployment cost:")

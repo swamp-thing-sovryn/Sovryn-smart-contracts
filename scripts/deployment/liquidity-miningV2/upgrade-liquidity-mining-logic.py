@@ -39,9 +39,9 @@ def loadConfig():
 
 def upgradeLiquidityMiningLogic():
     multisig = Contract.from_abi("MultiSig", address=contracts['multisig'], abi=MultiSigWallet.abi, owner=acct)
-    liquidityMiningProxy = Contract.from_abi("LiquidityMiningProxy", address = contracts['LiquidityMiningProxy'], abi = UpgradableProxy.abi, owner = acct)
+    liquidityMiningProxyV2 = Contract.from_abi("LiquidityMiningProxyV2", address = contracts['LiquidityMiningProxyV2'], abi = UpgradableProxy.abi, owner = acct)
 
-    data = liquidityMiningProxy.setImplementation.encode_input(contracts['LiquidityMiningLogic'])
-    tx = multisig.submitTransaction(liquidityMiningProxy.address,0,data)
+    data = liquidityMiningProxyV2.setImplementation.encode_input(contracts['LiquidityMiningLogicV2'])
+    tx = multisig.submitTransaction(liquidityMiningProxyV2.address,0,data)
     txId = tx.events["Submission"]["transactionId"]
     print("txid",txId)

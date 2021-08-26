@@ -24,7 +24,7 @@ def main():
     balanceBefore = acct.balance()
     
     # == LiquidityMining ===================================================================================================================
-    liquidityMiningLogic = acct.deploy(LiquidityMining)
+    liquidityMiningLogicV2 = acct.deploy(LiquidityMiningV2)
 
     print("deployment cost:")
     print((balanceBefore - acct.balance()) / 10**18)
