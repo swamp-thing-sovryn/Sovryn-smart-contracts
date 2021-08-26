@@ -13,6 +13,7 @@ const TestLockedSOV = artifacts.require("LockedSOVMockup");
 const Wrapper = artifacts.require("RBTCWrapperProxyMockupV2");
 const LockedSOVRewardTransferLogic = artifacts.require("LockedSOVRewardTransferLogic");
 const ERC20TransferLogic = artifacts.require("ERC20TransferLogic");
+const TestPoolToken = artifacts.require("TestPoolToken");
 
 describe("LiquidityMiningV2", () => {
 	const name = "Test SOV Token";
@@ -1654,6 +1655,15 @@ describe("LiquidityMiningV2", () => {
 	});
 
 	describe("onTokensDeposited", () => {
+		it("a pool should be able to deposit for a user", async () => {
+			const poolToken = await TestPoolToken.new("Test Pool Token", "TPT", 18, TOTAL_SUPPLY, liquidityMining.address);
+
+			await liquidityMining.add(poolToken.address, [SOVToken.address], [new BN(1)], false);
+			const tx = await poolToken.depositFor(account1, new BN(1000));
+			
+			const userInfo = await liquidityMining.getUserInfo(poolToken.address, account1);
+			expect(userInfo.amount).bignumber.equal(new BN(1000));
+		});
 		it("should revert if the sender is not a valid pool token", async () => {
 			await expectRevert(liquidityMining.onTokensDeposited(ZERO_ADDRESS, new BN(1000)), "Pool token not found");
 		});
