@@ -68,9 +68,6 @@ def main():
     SOVRewardTransferLogic = acct.deploy(LockedSOVRewardTransferLogic)
     SOVRewardTransferLogic.initialize(contracts['LockedSOV'],unlockedImmediatelyPercent)
 
-    # TODO Dummy pool token should be ERC20
-    #liquidityMiningConfigToken = acct.deploy(LiquidityMiningConfigToken)
-
     # TODO prepare pool tokens list
     poolTokens = [contracts['(WR)BTC/SOV'], contracts['LiquidityMiningConfigToken']]
     # we need to multiply by 1000 to have 100 M
@@ -84,13 +81,9 @@ def main():
     liquidityMining.addRewardToken(contracts['SOV'],rewardTokensPerBlock,startDelayBlocks,SOVRewardTransferLogic.address)
 
     #add pools
-    rewardTokensPool = [0] * len(poolTokens)
-    rewardTokensPool[0] = [contracts['SOV']]
-    rewardTokensPool[1] = [contracts['SOV']]
+    rewardTokensPool = [[contracts['SOV']],[contracts['SOV']]]
 
-    allocationPointsPool = [0] * len(poolTokens)
-    allocationPointsPool[0] = [ALLOCATION_POINT_SOV_BTC]
-    allocationPointsPool[1] = [MAX_ALLOCATION_POINT - ALLOCATION_POINT_SOV_BTC]
+    allocationPointsPool = [[ALLOCATION_POINT_SOV_BTC],[MAX_ALLOCATION_POINT - ALLOCATION_POINT_SOV_BTC]]
     
     for i in range(0,len(poolTokens)):
         print('adding pool', i)
