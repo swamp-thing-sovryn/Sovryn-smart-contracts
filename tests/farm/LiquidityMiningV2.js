@@ -1660,7 +1660,7 @@ describe("LiquidityMiningV2", () => {
 
 			await liquidityMining.add(poolToken.address, [SOVToken.address], [new BN(1)], false);
 			const tx = await poolToken.depositFor(account1, new BN(1000));
-			
+
 			const userInfo = await liquidityMining.getUserInfo(poolToken.address, account1);
 			expect(userInfo.amount).bignumber.equal(new BN(1000));
 		});
