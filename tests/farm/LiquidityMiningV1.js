@@ -1742,7 +1742,7 @@ describe("LiquidityMining", () => {
 		});
 	});
 
-	describe.only("Migration", () => {
+	describe("Migration", () => {
 		const MigrationGracePeriodStates = {
 			None: 0,
 			Started: 1,
