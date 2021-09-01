@@ -705,4 +705,17 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 		UserInfo memory ui = getUserInfo(_poolToken, _user);
 		return ui.amount;
 	}
+
+	function getPoolInfoListArray() external view returns (address[] memory _poolToken, uint96[] memory _allocationPoints, uint256[] memory _lastRewardBlock){
+		uint256 length = poolInfoList.length;
+		address[] memory _poolToken = new address[](length);
+		uint96[] memory _allocationPoints = new uint96[](length);
+		uint256[] memory _lastRewardBlock = new uint256[](length);
+		for (uint256 i = 0; i < length; i++) {
+			_poolToken[i] = address(poolInfoList[i].poolToken);
+			_allocationPoints[i] = poolInfoList[i].allocationPoint;
+			_lastRewardBlock[i] = poolInfoList[i].lastRewardBlock;
+		}
+		return (_poolToken,_allocationPoints,_lastRewardBlock);
+	}
 }
