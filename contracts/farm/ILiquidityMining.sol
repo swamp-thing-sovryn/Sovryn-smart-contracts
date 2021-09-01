@@ -19,4 +19,18 @@ interface ILiquidityMining {
 			uint96[] memory,
 			uint256[] memory
 		);
+
+	function getUserInfoListArray(address _user)
+		external
+		view
+		returns (
+			uint256[] memory,
+			uint256[] memory,
+			uint256[] memory,
+			uint256[] memory
+		);
+
+	function resetUser(address _user, uint256 _poolId) external;
+
+	function migrateFunds() external;
 }

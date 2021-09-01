@@ -953,8 +953,46 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 			uint256 poolId = _getPoolId(poolToken);
 			PoolInfoRewardToken storage poolInfoRewardToken = poolInfoRewardTokensMap[poolId][_SOVAddress];
 			poolInfoRewardToken.lastRewardBlock = lastRewardBlock;
-			updatePool(poolToken);
+			_updatePool(poolId);
 		}
 	}
 
+	/**
+	 * @notice read all users of all the pools from liquidity mining V1 contract and copy their info
+	 * @param _lmContract the address of the liquidity mining V1 contract
+	 * @param _users a list of users to be copied
+	 */
+	function migrateUsers(address _lmContract, address[] calldata _users, address _SOVAddress) external onlyAuthorized{
+		require(_lmContract != address(0), "Invalid contract address");
+		require(_SOVAddress != address(0), "Invalid SOV address");
+		ILiquidityMining lm = ILiquidityMining(_lmContract);
+
+		for (uint256 i = 0; i < _users.length; i++){
+			(uint256[] memory _poolId, uint256[] memory _amount, uint256[] memory _rewardDebt, uint256[] memory _accumulatedReward) = lm.getUserInfoListArray(_users[i]);
+
+			require(_poolId.length == _amount.length, "Arrays mismatch");
+			require(_poolId.length == _rewardDebt.length, "Arrays mismatch");
+			require(_poolId.length == _accumulatedReward.length, "Arrays mismatch");
+
+			address user = _users[i];
+
+			for (uint256 j = 0; j <_poolId.length; j++){
+				uint256 poolId = _poolId[j];
+				UserInfo storage userInfo = userInfoMap[poolId][user];
+				userInfo.amount = _amount[j];
+				userInfo.rewards[_SOVAddress] = UserReward(_rewardDebt[j],_accumulatedReward[j]);
+				lm.resetUser(user,poolId);
+			}
+		}
+	}
+
+	/**
+	 * @notice transfer all funds from liquidity mining V1
+	 * @param _lmContract the address of the liquidity mining V1 contract
+	 */
+	function migrateFunds(address _lmContract) external onlyAuthorized{
+		require(_lmContract != address(0), "Invalid contract address");
+		ILiquidityMining lm = ILiquidityMining(_lmContract);
+		lm.migrateFunds();
+	}
 }
