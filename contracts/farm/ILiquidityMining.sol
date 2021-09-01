@@ -11,5 +11,12 @@ interface ILiquidityMining {
 
 	function getUserPoolTokenBalance(address _poolToken, address _user) external view returns (uint256);
 
-	function getPoolInfoListArray() external view returns (address[] memory, uint96[] memory, uint256[] memory);
+	function getPoolInfoListArray()
+		external
+		view
+		returns (
+			address[] memory,
+			uint96[] memory,
+			uint256[] memory
+		);
 }
