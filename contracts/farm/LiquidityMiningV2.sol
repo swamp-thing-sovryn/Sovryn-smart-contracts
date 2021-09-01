@@ -159,10 +159,10 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	 */
 	function add(
 		address _poolToken,
-		address[] calldata _rewardTokens,
-		uint96[] calldata _allocationPoints,
+		address[] memory _rewardTokens,
+		uint96[] memory _allocationPoints,
 		bool _withUpdate
-	) external onlyAuthorized {
+	) public onlyAuthorized {
 		require(_rewardTokens.length > 0, "Invalid reward tokens length");
 		require(_rewardTokens.length == _allocationPoints.length, "Invalid allocation points length");
 		require(_poolToken != address(0), "Invalid token address");
@@ -925,4 +925,49 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 		uint256 poolId = _getPoolId(_poolToken);
 		return userInfoMap[poolId][_user].amount;
 	}
+
+
+	//Pool info struct in the old liqiudity mining contract
+	struct OldPoolInfo {
+		IERC20 poolToken; // Address of LP token contract.
+		uint96 allocationPoint; // How many allocation points assigned to this pool. Amount of reward tokens to distribute per block.
+		uint256 lastRewardBlock; // Last block number that reward tokens distribution occurs.
+		uint256 accumulatedRewardPerShare; // Accumulated amount of reward tokens per share, times 1e12. See below.
+	}
+
+	/**
+	* @notice read all pools from liquidity mining V1 contract and add them
+	* @param _lmContract the address of the liquidity mining V1 contract
+	*/
+	function migratedPools(address _lmContract, address SOVAddress) external onlyAuthorized {
+		require(_lmContract != address(0), "Invalid contract address");
+		require(SOVAddress != address(0), "Invalid SOV address");
+		ILiquidityMining lm = ILiquidityMining(_lmContract);
+		
+		(address[] memory poolToken,
+		uint96[] memory allocationPoints,
+		uint256[] memory lastRewardBlock) = lm.getPoolInfoListArray();
+
+		require(poolToken.length == allocationPoints.length,"Arrays mismatch");
+		require(poolToken.length == lastRewardBlock.length,"Arrays mismatch");
+
+		for (uint256 i = 0; i < poolToken.length; i++){
+			address _poolToken = poolToken[i];
+			uint96[] memory _allocationPoints = new uint96[](1);
+			_allocationPoints[0] = allocationPoints[i];
+			uint256 _lastRewardBlock = lastRewardBlock[i];
+			address[] memory _SOVAddress = new address[](1);
+			_SOVAddress[0] = SOVAddress;
+			//add will revert if poolToken is invalid or if it was already added
+			add(_poolToken,_SOVAddress,_allocationPoints,false);
+	
+			uint256 poolId = _getPoolId(_poolToken);
+			PoolInfoRewardToken storage poolInfoRewardToken = poolInfoRewardTokensMap[poolId][SOVAddress];
+			poolInfoRewardToken.lastRewardBlock = _lastRewardBlock;
+			updatePool(_poolToken);
+		}
+	}
+
+
+
 }
