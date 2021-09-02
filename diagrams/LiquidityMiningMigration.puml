@@ -1,0 +1,22 @@
+@startuml
+
+Admin -> LiquidityMiningV2: addRewardToken(address _SOV)
+Admin -> LiquidityMiningV1: startMigrationGracePeriod()
+User  -> LiquidityMiningV1: withdraw() or claim()
+Admin -> LiquidityMiningV2: migratePools()
+LiquidityMiningV2 -> LiquidityMiningV1: stopMigrationGracePeriod()
+LiquidityMiningV2 -> LiquidityMiningV1: getPoolInfoListArray()
+LiquidityMiningV1 -> LiquidityMiningV2: poolInfo[]
+LiquidityMiningV2 -> LiquidityMiningV2: adds pool info (allocation point, lastReward)
+loop N batches
+	Admin -> LiquidityMiningV2: migrateUsers()
+	LiquidityMiningV2 -> LiquidityMiningV1: getUserInfoListArray()
+	LiquidityMiningV1 -> LiquidityMiningV2: userInfo[]
+	LiquidityMiningV2 -> LiquidityMiningV2: adds user info (amount, rewards)
+end
+LiquidityMiningV2 -> LiquidityMiningV1: migrateFunds()
+LiquidityMiningV1 -> SOV: transfer(LiquidityMiningV2, balanceOf(LiquidityMiningV1))
+loop for each reward token
+	LiquidityMiningV1 -> ERC20: transfer(LiquidityMiningV2, balanceOf(LiquidityMiningV1))
+end
+@enduml
