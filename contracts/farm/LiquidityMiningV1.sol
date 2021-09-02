@@ -706,23 +706,45 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 		return ui.amount;
 	}
 
-	function getPoolInfoListArray() external view returns (address[] memory _poolToken, uint96[] memory _allocationPoints, uint256[] memory _lastRewardBlock){
+	/**
+	 * @notice returns arrays with all the pools on the contract
+	 */
+	function getPoolInfoListArray()
+		external
+		view
+		returns (
+			address[] memory _poolToken,
+			uint96[] memory _allocationPoints,
+			uint256[] memory _lastRewardBlock
+		)
+	{
 		uint256 length = poolInfoList.length;
 		for (uint256 i = 0; i < length; i++) {
 			_poolToken[i] = address(poolInfoList[i].poolToken);
 			_allocationPoints[i] = poolInfoList[i].allocationPoint;
 			_lastRewardBlock[i] = poolInfoList[i].lastRewardBlock;
 		}
-		return (_poolToken,_allocationPoints,_lastRewardBlock);
+		return (_poolToken, _allocationPoints, _lastRewardBlock);
 	}
 
-	// @TODO
-	/*function getUserInfoListArray(address _user) external view returns ( uint256[] memory _poolId, uint256[] memory _amount, uint256[] memory _rewardDebt, uint256[] memory _accumulatedReward) {
+	/**
+	 * @notice returns all pools that a user has on the contract, the poolId it's the index of arrays
+	 * @param _user the address of the user
+	*/	
+	function getUserInfoListArray(address _user) external view returns (uint256[] memory _amount, uint256[] memory _rewardDebt, uint256[] memory _accumulatedReward) {
 		uint256 length = poolInfoList.length;
-		UserInfo[] memory userInfoList = userInfoMap[i][_user];
 		for (uint256 i = 0; i < length; i++) {
-			_poolId = 
+			_amount[i] =  userInfoMap[i][_user].amount;
+			_rewardDebt[i] =  userInfoMap[i][_user].rewardDebt;
+			_accumulatedReward[i] =  userInfoMap[i][_user].accumulatedReward;
 		}
-		return (_poolID,_amount,_rewardDebt,_accumulatedReward);
-	}*/
+		return (_amount,_rewardDebt,_accumulatedReward);
+	}
+
+	function resetUser(address _user, uint256 _poolId) external onlyAuthorized {
+		UserInfo storage userInfo = userInfoMap[_poolId][_user];
+		userInfo.amount = 0;
+		userInfo.rewardDebt = 0;
+		userInfo.accumulatedReward = 0;
+	}
 }

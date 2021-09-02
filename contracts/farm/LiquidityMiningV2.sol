@@ -952,6 +952,7 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 
 			uint256 poolId = _getPoolId(poolToken);
 			PoolInfoRewardToken storage poolInfoRewardToken = poolInfoRewardTokensMap[poolId][_SOVAddress];
+			//add pool function put lastRewardBlock with current block number value, so we need to retrieve the original 
 			poolInfoRewardToken.lastRewardBlock = lastRewardBlock;
 			_updatePool(poolId);
 		}
@@ -970,19 +971,18 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 		require(_lmContract != address(0), "Invalid contract address");
 		require(_SOVAddress != address(0), "Invalid SOV address");
 		ILiquidityMining lm = ILiquidityMining(_lmContract);
-
+		lm.finishMigrationGracePeriod();
 		for (uint256 i = 0; i < _users.length; i++) {
-			(uint256[] memory _poolId, uint256[] memory _amount, uint256[] memory _rewardDebt, uint256[] memory _accumulatedReward) =
+			(uint256[] memory _amount, uint256[] memory _rewardDebt, uint256[] memory _accumulatedReward) =
 				lm.getUserInfoListArray(_users[i]);
 
-			require(_poolId.length == _amount.length, "Arrays mismatch");
-			require(_poolId.length == _rewardDebt.length, "Arrays mismatch");
-			require(_poolId.length == _accumulatedReward.length, "Arrays mismatch");
+			require(_amount.length == _rewardDebt.length, "Arrays mismatch");
+			require(_amount.length == _accumulatedReward.length, "Arrays mismatch");
 
 			address user = _users[i];
 
-			for (uint256 j = 0; j < _poolId.length; j++) {
-				uint256 poolId = _poolId[j];
+			for (uint256 j = 0; j < _amount.length; j++) {
+				uint256 poolId = j;
 				UserInfo storage userInfo = userInfoMap[poolId][user];
 				userInfo.amount = _amount[j];
 				userInfo.rewards[_SOVAddress] = UserReward(_rewardDebt[j], _accumulatedReward[j]);
