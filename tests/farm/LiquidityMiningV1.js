@@ -7,8 +7,8 @@ const TOTAL_SUPPLY = etherMantissa(1000000000);
 
 const TestToken = artifacts.require("TestToken");
 const LiquidityMiningConfigToken = artifacts.require("LiquidityMiningConfigToken");
+const LiquidityMiningV1Logic = artifacts.require("LiquidityMiningV1Mockup");
 const LiquidityMiningLogic = artifacts.require("LiquidityMiningV1Mockup");
-const LiquidityMiningProxy = artifacts.require("LiquidityMiningProxyV1");
 const TestLockedSOV = artifacts.require("LockedSOVMockup");
 const Wrapper = artifacts.require("RBTCWrapperProxyMockup");
 
@@ -1863,9 +1863,10 @@ describe("LiquidityMining", () => {
 	});
 
 	async function deployLiquidityMining() {
-		let liquidityMiningLogic = await LiquidityMiningLogic.new();
-		let liquidityMiningProxy = await LiquidityMiningProxy.new();
-		await liquidityMiningProxy.setImplementation(liquidityMiningLogic.address);
+		let liquidityMiningV1Logic = await LiquidityMiningV1Logic.new();
+		// Ideally it would be better to upgrade the logic to V2 after some actions have
+		// been performed to V1 to ensure everything was ok
+		await liquidityMiningProxy.setImplementation(liquidityMiningV1Logic.address);
 		liquidityMining = await LiquidityMiningLogic.at(liquidityMiningProxy.address);
 
 		wrapper = await Wrapper.new(liquidityMining.address);
