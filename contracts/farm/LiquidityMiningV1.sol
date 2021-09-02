@@ -730,15 +730,23 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 	/**
 	 * @notice returns all pools that a user has on the contract, the poolId it's the index of arrays
 	 * @param _user the address of the user
-	*/	
-	function getUserInfoListArray(address _user) external view returns (uint256[] memory _amount, uint256[] memory _rewardDebt, uint256[] memory _accumulatedReward) {
+	 */
+	function getUserInfoListArray(address _user)
+		external
+		view
+		returns (
+			uint256[] memory _amount,
+			uint256[] memory _rewardDebt,
+			uint256[] memory _accumulatedReward
+		)
+	{
 		uint256 length = poolInfoList.length;
 		for (uint256 i = 0; i < length; i++) {
-			_amount[i] =  userInfoMap[i][_user].amount;
-			_rewardDebt[i] =  userInfoMap[i][_user].rewardDebt;
-			_accumulatedReward[i] =  userInfoMap[i][_user].accumulatedReward;
+			_amount[i] = userInfoMap[i][_user].amount;
+			_rewardDebt[i] = userInfoMap[i][_user].rewardDebt;
+			_accumulatedReward[i] = userInfoMap[i][_user].accumulatedReward;
 		}
-		return (_amount,_rewardDebt,_accumulatedReward);
+		return (_amount, _rewardDebt, _accumulatedReward);
 	}
 
 	function resetUser(address _user, uint256 _poolId) external onlyAuthorized {

@@ -952,7 +952,7 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 
 			uint256 poolId = _getPoolId(poolToken);
 			PoolInfoRewardToken storage poolInfoRewardToken = poolInfoRewardTokensMap[poolId][_SOVAddress];
-			//add pool function put lastRewardBlock with current block number value, so we need to retrieve the original 
+			//add pool function put lastRewardBlock with current block number value, so we need to retrieve the original
 			poolInfoRewardToken.lastRewardBlock = lastRewardBlock;
 			_updatePool(poolId);
 		}
