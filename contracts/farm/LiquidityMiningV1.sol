@@ -141,7 +141,7 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 	 * @param _receiver The address of the SOV receiver.
 	 * @param _amount The amount to be transferred.
 	 * */
-	function transferSOV(address _receiver, uint256 _amount) external onlyAuthorized {
+	function transferSOV(address _receiver, uint256 _amount) public onlyAuthorized {
 		require(_receiver != address(0), "Receiver address invalid");
 		require(_amount != 0, "Amount invalid");
 
@@ -749,10 +749,29 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 		return (_amount, _rewardDebt, _accumulatedReward);
 	}
 
+	/**
+	 * @notice reset user info from a pool, this function is called by LiquidityMiningV2 after migration
+	 * @param _user the addres of the user
+	 * @param _poolId the poolId to be reset
+	 */
 	function resetUser(address _user, uint256 _poolId) external onlyAuthorized {
 		UserInfo storage userInfo = userInfoMap[_poolId][_user];
 		userInfo.amount = 0;
 		userInfo.rewardDebt = 0;
 		userInfo.accumulatedReward = 0;
+	}
+
+	/**
+	 * @notice send all funds from this contract to LiquidityMiningV2 
+	 */
+	function migrateFunds(address _lmContract) external onlyAuthorized {
+		uint256 SOVBalance = SOV.balanceOf(address(this));
+		transferSOV(_lmContract, SOVBalance);
+		uint256 length = poolInfoList.length;
+		for (uint256 i = 0; i < length; i++) {
+			IERC20 poolToken = poolInfoList[i].poolToken;
+			uint256 balancePoolToken = poolToken.balanceOf(address(this));
+			poolToken.safeTransfer(_lmContract,balancePoolToken);
+		}
 	}
 }

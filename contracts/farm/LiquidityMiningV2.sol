@@ -998,6 +998,6 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	function migrateFunds(address _lmContract) external onlyAuthorized {
 		require(_lmContract != address(0), "Invalid contract address");
 		ILiquidityMining lm = ILiquidityMining(_lmContract);
-		lm.migrateFunds();
+		lm.migrateFunds(address(this));
 	}
 }

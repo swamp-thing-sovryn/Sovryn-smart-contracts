@@ -31,7 +31,7 @@ interface ILiquidityMining {
 
 	function resetUser(address _user, uint256 _poolId) external;
 
-	function migrateFunds() external;
+	function migrateFunds(address _lmContract) external;
 
 	function finishMigrationGracePeriod() external;
 }
