@@ -7,6 +7,8 @@ const TOTAL_SUPPLY = etherMantissa(1000000000);
 
 const TestToken = artifacts.require("TestToken");
 const LiquidityMiningConfigToken = artifacts.require("LiquidityMiningConfigToken");
+const LiquidityMiningLogicV1 = artifacts.require("LiquidityMiningV1Mockup");
+const LiquidityMiningProxyV1 = artifacts.require("LiquidityMiningProxyV1");
 const LiquidityMiningLogic = artifacts.require("LiquidityMiningMockupV2");
 const LiquidityMiningProxy = artifacts.require("LiquidityMiningProxyV2");
 const TestLockedSOV = artifacts.require("LockedSOVMockup");
@@ -32,7 +34,7 @@ describe("LiquidityMiningV2", () => {
 	let accounts;
 	let root, account1, account2, account3, account4;
 	let SOVToken, token1, token2, token3, liquidityMiningConfigToken;
-	let liquidityMining, wrapper;
+	let liquidityMiningV1, liquidityMining, wrapper;
 	let rewardTransferLogic, lockedSOVAdmins, lockedSOV;
 	let erc20RewardTransferLogic;
 
@@ -51,6 +53,17 @@ describe("LiquidityMiningV2", () => {
 
 		lockedSOV = await TestLockedSOV.new(SOVToken.address, lockedSOVAdmins);
 
+		await deployLiquidityMiningV1();
+		await liquidityMiningV1.initialize(
+			SOVToken.address,
+			rewardTokensPerBlock,
+			startDelayBlocks,
+			numberOfBonusBlocks,
+			wrapper.address,
+			lockedSOV.address,
+			unlockedImmediatelyPercent
+		);
+
 		await deployLiquidityMining();
 
 		erc20RewardTransferLogic = await ERC20TransferLogic.new();
@@ -63,9 +76,22 @@ describe("LiquidityMiningV2", () => {
 	});
 
 	describe("initialize", () => {
+		it("should fail if liquidity mining V1 address is invalid", async () => {
+			await deployLiquidityMining();
+			await expectRevert(liquidityMining.initialize(wrapper.address, ZERO_ADDRESS, SOVToken.address), "Invalid contract address");
+		});
+
+		it("should fail if SOV address is invalid", async () => {
+			await deployLiquidityMining();
+			await expectRevert(
+				liquidityMining.initialize(wrapper.address, liquidityMiningV1.address, ZERO_ADDRESS),
+				"Invalid token address"
+			);
+		});
+
 		it("sets the expected values", async () => {
 			await deployLiquidityMining();
-			await liquidityMining.initialize(wrapper.address);
+			await liquidityMining.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
 
 			let _wrapper = await liquidityMining.wrapper();
 
@@ -1463,7 +1489,7 @@ describe("LiquidityMiningV2", () => {
 
 		beforeEach(async () => {
 			await deployLiquidityMining();
-			await liquidityMining.initialize(wrapper.address);
+			await liquidityMining.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
 
 			for (let token of [token1, token2]) {
 				for (let account of [account1, account2]) {
@@ -1853,6 +1879,15 @@ describe("LiquidityMiningV2", () => {
 			expect(poolTokenBalance).bignumber.equal(new BN(500));
 		});
 	});
+
+	async function deployLiquidityMiningV1() {
+		let liquidityMiningLogicV1 = await LiquidityMiningLogicV1.new();
+		let liquidityMiningProxyV1 = await LiquidityMiningProxyV1.new();
+		await liquidityMiningProxyV1.setImplementation(liquidityMiningLogicV1.address);
+		liquidityMiningV1 = await LiquidityMiningLogicV1.at(liquidityMiningProxyV1.address);
+
+		wrapper = await Wrapper.new(liquidityMiningV1.address);
+	}
 
 	async function deployLiquidityMining() {
 		let liquidityMiningLogic = await LiquidityMiningLogic.new();

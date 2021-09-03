@@ -770,14 +770,14 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 	/**
 	 * @notice send all funds from this contract to LiquidityMiningV2
 	 */
-	function migrateFunds(address _lmContract) external onlyAuthorized {
+	function migrateFunds() external onlyAuthorized {
 		uint256 SOVBalance = SOV.balanceOf(address(this));
-		transferSOV(_lmContract, SOVBalance);
+		transferSOV(msg.sender, SOVBalance);
 		uint256 length = poolInfoList.length;
 		for (uint256 i = 0; i < length; i++) {
 			IERC20 poolToken = poolInfoList[i].poolToken;
 			uint256 balancePoolToken = poolToken.balanceOf(address(this));
-			poolToken.safeTransfer(_lmContract, balancePoolToken);
+			poolToken.safeTransfer(msg.sender, balancePoolToken);
 		}
 	}
 }

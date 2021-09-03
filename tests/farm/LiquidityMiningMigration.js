@@ -71,7 +71,7 @@ describe("LiquidityMiningMigration", () => {
 		);
 
 		await deployLiquidityMiningV2();
-		await liquidityMiningV2.initialize(wrapper.address);
+		await liquidityMiningV2.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
 
 		erc20RewardTransferLogic = await ERC20TransferLogic.new();
 
@@ -130,16 +130,7 @@ describe("LiquidityMiningMigration", () => {
 
 	describe("Migration", () => {
 		it("should only allow to migrat pools by the admin", async () => {
-			await expectRevert(
-				liquidityMiningV2.migratePools(liquidityMiningV1.address, SOVToken.address, { from: account1 }),
-				"unauthorized"
-			);
-		});
-		it("should fails if liquidity mining V1 contract address is not valid", async () => {
-			await expectRevert(liquidityMiningV2.migratePools(ZERO_ADDRESS, SOVToken.address), "Invalid contract address");
-		});
-		it("should fails if SOV address is not valid", async () => {
-			await expectRevert(liquidityMiningV2.migratePools(liquidityMiningV1.address, ZERO_ADDRESS), "Invalid SOV address");
+			await expectRevert(liquidityMiningV2.migratePools({ from: account1 }), "unauthorized");
 		});
 	});
 
