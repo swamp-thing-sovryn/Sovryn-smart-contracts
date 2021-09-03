@@ -54,6 +54,8 @@ describe("LiquidityMiningMigration", () => {
 		token7 = await TestToken.new("Test token 7", "TST-7", 18, TOTAL_SUPPLY);
 		token8 = await TestToken.new("Test token 8", "TST-8", 18, TOTAL_SUPPLY);
 
+		tokens = [token1, token2, token3, token4, token5, token6, token7, token8];
+
 		liquidityMiningConfigToken = await LiquidityMiningConfigToken.new();
 		lockedSOVAdmins = [account1, account2];
 
@@ -80,12 +82,12 @@ describe("LiquidityMiningMigration", () => {
 
 		await liquidityMiningV2.addRewardToken(SOVToken.address, rewardTokensPerBlock, startDelayBlocks, rewardTransferLogic.address);
 
+		//set accounts deposits pools in liquidity mining V1
+		setAccountsDepositsConstants();
 		//mint some tokens to all the accounts
 		await initializaAccountsTokensBalance();
 		//add all poolTokens to liquidityMiningV1
 		await initializeLiquidityMiningV1Pools();
-		//set accounts deposits pools in liquidity mining V1
-		setAccountsDepositsConstants();
 		//make deposits from accounts to some pools
 		await initializeLiquidityMiningDeposits();
 	});
@@ -117,21 +119,24 @@ describe("LiquidityMiningMigration", () => {
 
 		it("should check all pool have been added", async () => {
 			const { _poolToken, _allocationPoints, _lastRewardBlock } = await liquidityMiningV1.getPoolInfoListArray();
-			expect(_poolToken[0]).equal(token1.address);
-			expect(_poolToken[1]).equal(token2.address);
-			expect(_poolToken[2]).equal(token3.address);
-			expect(_poolToken[3]).equal(token4.address);
-			expect(_poolToken[4]).equal(token5.address);
-			expect(_poolToken[5]).equal(token6.address);
-			expect(_poolToken[6]).equal(token7.address);
-			expect(_poolToken[7]).equal(token8.address);
+			for (let i = 0 ; i < tokens.length ; i++ ){
+				expect(_poolToken[i]).equal(tokens[i].address);
+			};
 		});
 	});
 
-	describe("Migration", () => {
+	describe("MigratePools", () => {
 		it("should only allow to migrat pools by the admin", async () => {
 			await expectRevert(liquidityMiningV2.migratePools({ from: account1 }), "unauthorized");
 		});
+		it("should add pools from liquidityMininigV1", async () =>{
+			await liquidityMiningV2.migratePools();
+			for (let i = 0 ; i < tokens.length ; i++ ){
+				let poolToken = await liquidityMiningV2.poolInfoList(i);
+				expect(poolToken).equal(tokens[i].address);
+			};
+		});
+
 	});
 
 	async function deployLiquidityMiningV1() {
@@ -154,19 +159,14 @@ describe("LiquidityMiningMigration", () => {
 
 	async function initializeLiquidityMiningV1Pools() {
 		let allocationPoint = new BN(10);
-		await liquidityMiningV1.add(token1.address, allocationPoint, false);
-		await liquidityMiningV1.add(token2.address, allocationPoint, false);
-		await liquidityMiningV1.add(token3.address, allocationPoint, false);
-		await liquidityMiningV1.add(token4.address, allocationPoint, false);
-		await liquidityMiningV1.add(token5.address, allocationPoint, false);
-		await liquidityMiningV1.add(token6.address, allocationPoint, false);
-		await liquidityMiningV1.add(token7.address, allocationPoint, false);
-		await liquidityMiningV1.add(token8.address, allocationPoint, false);
+
+		for (let i = 0 ; i < tokens.length ; i++ ){
+			await liquidityMiningV1.add(tokens[i].address, allocationPoint, false);
+		}
 	}
 
 	async function initializaAccountsTokensBalance() {
 		let amount = new BN(1000);
-		let tokens = [token1, token2, token3, token4, token5, token6, token7, token8];
 
 		tokens.forEach((token) => {
 			accounts.forEach(async (account) => {
@@ -183,6 +183,7 @@ describe("LiquidityMiningMigration", () => {
 			});
 		});
 	}
+
 
 	function setAccountsDepositsConstants() {
 		accountDeposits = [
