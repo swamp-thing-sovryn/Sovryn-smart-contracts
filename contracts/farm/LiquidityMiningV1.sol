@@ -719,6 +719,9 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 		)
 	{
 		uint256 length = poolInfoList.length;
+		_poolToken = new address[](length);
+		_allocationPoints = new uint96[](length);
+		_lastRewardBlock = new uint256[](length);
 		for (uint256 i = 0; i < length; i++) {
 			_poolToken[i] = address(poolInfoList[i].poolToken);
 			_allocationPoints[i] = poolInfoList[i].allocationPoint;
@@ -741,6 +744,9 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 		)
 	{
 		uint256 length = poolInfoList.length;
+		_amount = new uint256[](length);
+		_rewardDebt = new uint256[](length);
+		_accumulatedReward = new uint256[](length);
 		for (uint256 i = 0; i < length; i++) {
 			_amount[i] = userInfoMap[i][_user].amount;
 			_rewardDebt[i] = userInfoMap[i][_user].rewardDebt;

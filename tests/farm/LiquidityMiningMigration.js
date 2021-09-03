@@ -40,7 +40,7 @@ describe("LiquidityMiningMigration", () => {
 
 	before(async () => {
 		accounts = await web3.eth.getAccounts();
-		[root, account1, account2, account3, account4, account5, account6, account7, account8, account9, ...accounts] = accounts;
+		[root, account1, account2, account3, ...accounts] = accounts;
 	});
 
 	beforeEach(async () => {
@@ -91,10 +91,55 @@ describe("LiquidityMiningMigration", () => {
 	});
 
 	describe("initializeLiquidityMiningV1", () => {
-		it("check expected values", async () => {
-			/** @TODO check in liquidity mining V1 accounts deposits
-			 *
-			 */
+		beforeEach(async () => {
+			//create maps for access (account,token) => amount
+			accountsMap = new Map(accountDeposits.map((entry) => [entry.account, entry.deposit]));
+			depositsMap = new Map();
+			accountsMap.forEach((deposit, account) => {
+				map = depositsMap.set(account, new Map(deposit.map((entry) => [entry.token, entry.amount])));
+			});
+		});
+
+		it("should check all user deposits", async () => {
+			accounts.forEach(async (account) => {
+				const { _amount, _rewardDebt, _accumulatedReward } = await liquidityMiningV1.getUserInfoListArray(account);
+				for (let i = 0; i < _amount.length; i++) {
+					let { poolToken } = await liquidityMiningV1.poolInfoList(i);
+					if (depositsMap.has(account)) {
+						if (depositsMap.get(account).has(poolToken)) {
+							let amountDeposited = depositsMap.get(account).get(poolToken);
+							expect(_amount[i]).bignumber.equal(amountDeposited);
+						}
+					}
+				}
+			});
+		});
+
+		it("should check all pool have been added", async () => {
+			const { _poolToken, _allocationPoints, _lastRewardBlock } = await liquidityMiningV1.getPoolInfoListArray();
+			expect(_poolToken[0]).equal(token1.address);
+			expect(_poolToken[1]).equal(token2.address);
+			expect(_poolToken[2]).equal(token3.address);
+			expect(_poolToken[3]).equal(token4.address);
+			expect(_poolToken[4]).equal(token5.address);
+			expect(_poolToken[5]).equal(token6.address);
+			expect(_poolToken[6]).equal(token7.address);
+			expect(_poolToken[7]).equal(token8.address);
+		});
+	});
+
+	describe("Migration", () => {
+		it("should only allow to migrat pools by the admin", async () => {
+			await expectRevert(
+				liquidityMiningV2.migratePools(liquidityMiningV1.address, SOVToken.address, { from: account1 }),
+				"unauthorized"
+			);
+		});
+		it("should fails if liquidity mining V1 contract address is not valid", async () => {
+			await expectRevert(liquidityMiningV2.migratePools(ZERO_ADDRESS, SOVToken.address), "Invalid contract address");
+		});
+		it("should fails if SOV address is not valid", async () => {
+			await expectRevert(liquidityMiningV2.migratePools(liquidityMiningV1.address, ZERO_ADDRESS), "Invalid SOV address");
 		});
 	});
 
@@ -143,7 +188,7 @@ describe("LiquidityMiningMigration", () => {
 	async function initializeLiquidityMiningDeposits() {
 		accountDeposits.forEach((account) => {
 			account.deposit.forEach(async (deposit) => {
-				await liquidityMiningV1.deposit(deposit.token.address, deposit.amount, ZERO_ADDRESS, { from: account.account });
+				await liquidityMiningV1.deposit(deposit.token, deposit.amount, ZERO_ADDRESS, { from: account.account });
 			});
 		});
 	}
@@ -151,171 +196,171 @@ describe("LiquidityMiningMigration", () => {
 	function setAccountsDepositsConstants() {
 		accountDeposits = [
 			{
-				account: account1,
+				account: accounts[0],
 
 				deposit: [
 					{
-						token: token1,
+						token: token1.address,
 						amount: new BN(10),
 					},
 					{
-						token: token2,
+						token: token2.address,
 						amount: new BN(10),
 					},
 					{
-						token: token3,
+						token: token3.address,
 						amount: new BN(10),
 					},
 					{
-						token: token4,
+						token: token4.address,
 						amount: new BN(10),
 					},
 					{
-						token: token5,
+						token: token5.address,
 						amount: new BN(10),
 					},
 					{
-						token: token6,
+						token: token6.address,
 						amount: new BN(10),
 					},
 					{
-						token: token7,
+						token: token7.address,
 						amount: new BN(10),
 					},
 					{
-						token: token8,
+						token: token8.address,
 						amount: new BN(10),
 					},
 				],
 			},
 			{
-				account: account2,
+				account: accounts[1],
 
 				deposit: [
 					{
-						token: token1,
+						token: token1.address,
 						amount: new BN(5),
 					},
 					{
-						token: token2,
+						token: token2.address,
 						amount: new BN(5),
 					},
 					{
-						token: token3,
+						token: token3.address,
 						amount: new BN(5),
 					},
 					{
-						token: token4,
+						token: token4.address,
 						amount: new BN(5),
 					},
 				],
 			},
 			{
-				account: account3,
+				account: accounts[2],
 
 				deposit: [
 					{
-						token: token1,
+						token: token1.address,
 						amount: new BN(55),
 					},
 				],
 			},
 			{
-				account: account4,
+				account: accounts[3],
 
 				deposit: [
 					{
-						token: token8,
+						token: token8.address,
 						amount: new BN(25),
 					},
 				],
 			},
 			{
-				account: account5,
+				account: accounts[4],
 
 				deposit: [
 					{
-						token: token6,
+						token: token6.address,
 						amount: new BN(25),
 					},
 					{
-						token: token7,
+						token: token7.address,
 						amount: new BN(100),
 					},
 					{
-						token: token8,
+						token: token8.address,
 						amount: new BN(100),
 					},
 				],
 			},
 			{
-				account: account6,
+				account: accounts[5],
 
 				deposit: [
 					{
-						token: token1,
+						token: token1.address,
 						amount: new BN(25),
 					},
 					{
-						token: token3,
+						token: token3.address,
 						amount: new BN(100),
 					},
 					{
-						token: token8,
+						token: token8.address,
 						amount: new BN(100),
 					},
 				],
 			},
 			{
-				account: account7,
+				account: accounts[6],
 
 				deposit: [
 					{
-						token: token2,
+						token: token2.address,
 						amount: new BN(25),
 					},
 					{
-						token: token4,
+						token: token4.address,
 						amount: new BN(100),
 					},
 					{
-						token: token6,
+						token: token6.address,
 						amount: new BN(100),
 					},
 				],
 			},
 			{
-				account: account8,
+				account: accounts[7],
 
 				deposit: [
 					{
-						token: token3,
+						token: token3.address,
 						amount: new BN(25),
 					},
 					{
-						token: token5,
+						token: token5.address,
 						amount: new BN(100),
 					},
 					{
-						token: token7,
+						token: token7.address,
 						amount: new BN(100),
 					},
 				],
 			},
 			{
-				account: account9,
+				account: accounts[8],
 
 				deposit: [
 					{
-						token: token4,
+						token: token4.address,
 						amount: new BN(25),
 					},
 					{
-						token: token5,
+						token: token5.address,
 						amount: new BN(100),
 					},
 					{
-						token: token6,
+						token: token6.address,
 						amount: new BN(100),
 					},
 				],
