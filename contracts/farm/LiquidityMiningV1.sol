@@ -715,19 +715,22 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 		returns (
 			address[] memory _poolToken,
 			uint96[] memory _allocationPoints,
-			uint256[] memory _lastRewardBlock
+			uint256[] memory _lastRewardBlock,
+			uint256[] memory _accumulatedRewardPerShare
 		)
 	{
 		uint256 length = poolInfoList.length;
 		_poolToken = new address[](length);
 		_allocationPoints = new uint96[](length);
 		_lastRewardBlock = new uint256[](length);
+		_accumulatedRewardPerShare = new uint256[](length);
 		for (uint256 i = 0; i < length; i++) {
 			_poolToken[i] = address(poolInfoList[i].poolToken);
 			_allocationPoints[i] = poolInfoList[i].allocationPoint;
 			_lastRewardBlock[i] = poolInfoList[i].lastRewardBlock;
+			_accumulatedRewardPerShare[i] = poolInfoList[i].accumulatedRewardPerShare;
 		}
-		return (_poolToken, _allocationPoints, _lastRewardBlock);
+		return (_poolToken, _allocationPoints, _lastRewardBlock, _accumulatedRewardPerShare);
 	}
 
 	/**

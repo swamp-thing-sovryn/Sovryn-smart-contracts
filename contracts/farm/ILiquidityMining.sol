@@ -17,6 +17,7 @@ interface ILiquidityMining {
 		returns (
 			address[] memory,
 			uint96[] memory,
+			uint256[] memory,
 			uint256[] memory
 		);
 

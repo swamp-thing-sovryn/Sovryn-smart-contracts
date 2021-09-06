@@ -937,8 +937,12 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	 * @notice read all pools from liquidity mining V1 contract and add them
 	 */
 	function migratePools() external onlyAuthorized {
-		(address[] memory _poolToken, uint96[] memory _allocationPoints, uint256[] memory _lastRewardBlock) =
-			liquidityMiningV1.getPoolInfoListArray();
+		(
+			address[] memory _poolToken,
+			uint96[] memory _allocationPoints,
+			uint256[] memory _lastRewardBlock,
+			uint256[] memory _accumulatedRewardPerShare
+		) = liquidityMiningV1.getPoolInfoListArray();
 
 		require(_poolToken.length == _allocationPoints.length, "Arrays mismatch");
 		require(_poolToken.length == _lastRewardBlock.length, "Arrays mismatch");
@@ -948,6 +952,7 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 			uint96[] memory allocationPoints = new uint96[](1);
 			allocationPoints[0] = _allocationPoints[i];
 			uint256 lastRewardBlock = _lastRewardBlock[i];
+			uint256 accumulatedRewardPerShare = _accumulatedRewardPerShare[i];
 			address[] memory SOVAddress = new address[](1);
 			SOVAddress[0] = address(SOV);
 			//add will revert if poolToken is invalid or if it was already added
@@ -957,7 +962,8 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 			PoolInfoRewardToken storage poolInfoRewardToken = poolInfoRewardTokensMap[poolId][address(SOV)];
 			//add pool function put lastRewardBlock with current block number value, so we need to retrieve the original
 			poolInfoRewardToken.lastRewardBlock = lastRewardBlock;
-			_updatePool(poolId);
+			poolInfoRewardToken.accumulatedRewardPerShare = accumulatedRewardPerShare;
+			//_updatePool(poolId);
 		}
 	}
 
@@ -1006,10 +1012,11 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 		returns (
 			address[] memory _poolToken,
 			uint96[] memory _allocationPoints,
-			uint256[] memory _lastRewardBlock
+			uint256[] memory _lastRewardBlock,
+			uint256[] memory _accumulatedRewardPerShare
 		)
 	{
-		return (_poolToken, _allocationPoints, _lastRewardBlock);
+		return (_poolToken, _allocationPoints, _lastRewardBlock, _accumulatedRewardPerShare);
 	}
 
 	/**

@@ -1,6 +1,8 @@
 const { expect } = require("chai");
 const { expectRevert, expectEvent, constants, BN } = require("@openzeppelin/test-helpers");
 const { etherMantissa, mineBlock } = require("../Utils/Ethereum");
+var ethers = require("ethers");
+var crypto = require("crypto");
 
 const { ZERO_ADDRESS } = constants;
 const TOTAL_SUPPLY = etherMantissa(1000000000);
@@ -37,6 +39,7 @@ describe("LiquidityMiningMigration", () => {
 	let liquidityMiningV1, liquidityMiningV2, wrapper;
 	let rewardTransferLogic, lockedSOVAdmins, lockedSOV;
 	let erc20RewardTransferLogic;
+	let allocationPoint = new BN(10);
 
 	before(async () => {
 		accounts = await web3.eth.getAccounts();
@@ -113,7 +116,7 @@ describe("LiquidityMiningMigration", () => {
 	});
 
 	describe("MigratePools", () => {
-		it("should only allow to migrat pools by the admin", async () => {
+		it("should only allow to migrate pools by the admin", async () => {
 			await expectRevert(liquidityMiningV2.migratePools({ from: account1 }), "unauthorized");
 		});
 		it("should add pools from liquidityMininigV1", async () => {
@@ -121,7 +124,71 @@ describe("LiquidityMiningMigration", () => {
 			for (let i = 0; i < tokens.length; i++) {
 				let poolToken = await liquidityMiningV2.poolInfoList(i);
 				expect(poolToken).equal(tokens[i].address);
+
+				let {
+					allocationPoint: allocationPointV2,
+					lastRewardBlock: lastRewardBlockV2,
+					accumulatedRewardPerShare: accumulatedRewardPerShareV2,
+				} = await liquidityMiningV2.poolInfoRewardTokensMap(i, SOVToken.address);
+				let {
+					allocationPoint: allocationPointV1,
+					lastRewardBlock: lastRewardBlockV1,
+					accumulatedRewardPerShare: accumulatedRewardPerShareV1,
+				} = await liquidityMiningV1.poolInfoList(i);
+				expect(allocationPointV2).bignumber.equal(allocationPointV1);
+				expect(lastRewardBlockV2).bignumber.equal(lastRewardBlockV1);
+				expect(accumulatedRewardPerShareV2).bignumber.equal(accumulatedRewardPerShareV1);
 			}
+		});
+	});
+
+	describe("MigrateUsers", () => {
+		it("should only allow to migrate users by the admin", async () => {
+			await expectRevert(liquidityMiningV2.migrateUsers(accounts, { from: account1 }), "unauthorized");
+		});
+		it("should fail if liquidity mining V2 contract was not added as admin", async () => {
+			await expectRevert(liquidityMiningV2.migrateUsers(accounts), "unauthorized");
+		});
+		it("should only allow to migrate users if the migrate grace period started", async () => {
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await expectRevert(liquidityMiningV2.migrateUsers(accounts), "Migration hasn't started yet");
+		});
+		it("should migrate one account from liquidityMininigV1", async () => {
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migratePools();
+			await liquidityMiningV2.migrateUsers([accounts[0]]);
+			for (let i = 0; i < accountDeposits[0].deposit.length; i++) {
+				let { amount } = await liquidityMiningV2.getUserInfo(accountDeposits[0].deposit[i].token, accounts[0]);
+				expect(amount).bignumber.equal(accountDeposits[0].deposit[i].amount);
+			}
+		});
+		it("should migrate all accounts with deposits from liquidityMininigV1", async () => {
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migratePools();
+			await liquidityMiningV2.migrateUsers(accounts);
+			for (let i = 0; i < accountDeposits.length; i++) {
+				for (let j = 0; j < accountDeposits[i].deposit.length; j++) {
+					let { amount: amountV2 } = await liquidityMiningV2.getUserInfo(
+						accountDeposits[i].deposit[j].token,
+						accountDeposits[i].account
+					);
+					let { amount: amountV1 } = await liquidityMiningV1.getUserInfo(
+						accountDeposits[i].deposit[j].token,
+						accountDeposits[i].account
+					);
+					expect(amountV2).bignumber.equal(accountDeposits[i].deposit[j].amount);
+					expect(amountV1).bignumber.equal(new BN(0));
+				}
+			}
+		});
+		it("should migrate 75 random accounts from liquidityMininigV1", async () => {
+			let randomAccounts = createRandomAccounts(75);
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migratePools();
+			await liquidityMiningV2.migrateUsers(randomAccounts);
 		});
 	});
 
@@ -144,8 +211,6 @@ describe("LiquidityMiningMigration", () => {
 	}
 
 	async function initializeLiquidityMiningV1Pools() {
-		let allocationPoint = new BN(10);
-
 		for (let i = 0; i < tokens.length; i++) {
 			await liquidityMiningV1.add(tokens[i].address, allocationPoint, false);
 		}
@@ -168,6 +233,17 @@ describe("LiquidityMiningMigration", () => {
 				await liquidityMiningV1.deposit(deposit.token, deposit.amount, ZERO_ADDRESS, { from: account.account });
 			});
 		});
+	}
+
+	function createRandomAccounts(length) {
+		const randomAccounts = [];
+		for (let i = 0; i < length; i++) {
+			let id = crypto.randomBytes(32).toString("hex");
+			let privateKey = "0x" + id;
+			let wallet = new ethers.Wallet(privateKey);
+			randomAccounts.push(wallet.address);
+		}
+		return randomAccounts;
 	}
 
 	function setAccountsDepositsConstants() {
