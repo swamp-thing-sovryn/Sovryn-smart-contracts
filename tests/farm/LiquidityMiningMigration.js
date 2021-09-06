@@ -153,33 +153,32 @@ describe("LiquidityMiningMigration", () => {
 			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
 			await expectRevert(liquidityMiningV2.migrateUsers(accounts), "Migration hasn't started yet");
 		});
-		it("should migrate one account from liquidityMininigV1", async () => {
-			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
-			await liquidityMiningV1.startMigrationGracePeriod();
-			await liquidityMiningV2.migratePools();
-			await liquidityMiningV2.migrateUsers([accounts[0]]);
-			for (let i = 0; i < accountDeposits[0].deposit.length; i++) {
-				let { amount } = await liquidityMiningV2.getUserInfo(accountDeposits[0].deposit[i].token, accounts[0]);
-				expect(amount).bignumber.equal(accountDeposits[0].deposit[i].amount);
-			}
-		});
 		it("should migrate all accounts with deposits from liquidityMininigV1", async () => {
+			let userInfoV1Before = [];
+			for (let i = 0; i < tokens.length; i++) {
+				userInfoV1Before[i] = [];
+				for (let j = 0; j < accountDeposits.length; j++) {
+					let userInfo = await liquidityMiningV1.getUserInfo(tokens[i].address, accountDeposits[j].account);
+					userInfoV1Before[i][j] = userInfo;
+				}
+			}
+
 			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
 			await liquidityMiningV1.startMigrationGracePeriod();
 			await liquidityMiningV2.migratePools();
 			await liquidityMiningV2.migrateUsers(accounts);
-			for (let i = 0; i < accountDeposits.length; i++) {
-				for (let j = 0; j < accountDeposits[i].deposit.length; j++) {
-					let { amount: amountV2 } = await liquidityMiningV2.getUserInfo(
-						accountDeposits[i].deposit[j].token,
-						accountDeposits[i].account
-					);
-					let { amount: amountV1 } = await liquidityMiningV1.getUserInfo(
-						accountDeposits[i].deposit[j].token,
-						accountDeposits[i].account
-					);
-					expect(amountV2).bignumber.equal(accountDeposits[i].deposit[j].amount);
-					expect(amountV1).bignumber.equal(new BN(0));
+
+			for (let i = 0; i < tokens.length; i++) {
+				for (let j = 0; j < accountDeposits.length; j++) {
+					let userInfoV1 = await liquidityMiningV1.getUserInfo(tokens[i].address, accountDeposits[j].account);
+					let userInfoV2 = await liquidityMiningV2.getUserInfo(tokens[i].address, accountDeposits[j].account);
+
+					expect(userInfoV2.amount).bignumber.equal(userInfoV1Before[i][j].amount);
+					expect(userInfoV2.rewards[0].rewardDebt).bignumber.equal(userInfoV1Before[i][j].rewardDebt);
+					expect(userInfoV2.rewards[0].accumulatedReward).bignumber.equal(userInfoV1Before[i][j].accumulatedReward);
+					expect(userInfoV1.amount).bignumber.equal(new BN(0));
+					expect(userInfoV1.rewardDebt).bignumber.equal(new BN(0));
+					expect(userInfoV1.accumulatedReward).bignumber.equal(new BN(0));
 				}
 			}
 		});
@@ -190,6 +189,7 @@ describe("LiquidityMiningMigration", () => {
 			await liquidityMiningV2.migratePools();
 			await liquidityMiningV2.migrateUsers(randomAccounts);
 		});
+		it("should claim rewards after migration", async () => {});
 	});
 
 	describe("migrateFunds", () => {
@@ -280,6 +280,14 @@ describe("LiquidityMiningMigration", () => {
 			randomAccounts.push(wallet.address);
 		}
 		return randomAccounts;
+	}
+
+	async function checkUserReward(user, poolToken, depositBlockNumber, latestBlockNumber) {
+		let passedBlocks = latestBlockNumber.sub(depositBlockNumber);
+		let userReward = passedBlocks.mul(rewardTokensPerBlock);
+		let userInfo = await liquidityMining.getUserInfo(poolToken.address, user);
+		expect(userInfo.rewards[0].accumulatedReward).bignumber.equal(new BN(0));
+		return userReward;
 	}
 
 	function setAccountsDepositsConstants() {
