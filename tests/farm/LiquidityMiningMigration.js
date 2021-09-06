@@ -192,6 +192,42 @@ describe("LiquidityMiningMigration", () => {
 		});
 	});
 
+	describe("migrateFunds", () => {
+		it("should only allow to migrate funds by the admin", async () => {
+			await expectRevert(liquidityMiningV2.migrateFunds({ from: account1 }), "unauthorized");
+		});
+		it("should fail if liquidity mining V2 contract was not added as admin", async () => {
+			await expectRevert(liquidityMiningV2.migrateFunds(), "unauthorized");
+		});
+		it("should migrate funds from liquidityMiningV1", async () => {
+			let SOVBalanceV1Before = await SOVToken.balanceOf(liquidityMiningV1.address);
+			let SOVBalanceV2Before = await SOVToken.balanceOf(liquidityMiningV2.address);
+			let tokenBalancesV1Before = [];
+			let tokenBalancesV2Before = [];
+			for (let i = 0; i < tokens.length; i++) {
+				tokenBalancesV1Before.push(await tokens[i].balanceOf(liquidityMiningV1.address));
+				tokenBalancesV2Before.push(await tokens[i].balanceOf(liquidityMiningV2.address));
+				expect(tokenBalancesV2Before[i]).bignumber.equal(new BN(0));
+			}
+			expect(SOVBalanceV2Before).bignumber.equal(new BN(0));
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV2.migrateFunds();
+
+			let SOVBalanceV1After = await SOVToken.balanceOf(liquidityMiningV1.address);
+			let SOVBalanceV2After = await SOVToken.balanceOf(liquidityMiningV2.address);
+			let tokenBalancesV1After = [];
+			let tokenBalancesV2After = [];
+			for (let i = 0; i < tokens.length; i++) {
+				tokenBalancesV1After.push(await tokens[i].balanceOf(liquidityMiningV1.address));
+				tokenBalancesV2After.push(await tokens[i].balanceOf(liquidityMiningV2.address));
+				expect(tokenBalancesV1After[i]).bignumber.equal(new BN(0));
+				expect(tokenBalancesV2After[i]).bignumber.equal(tokenBalancesV1Before[i]);
+			}
+			expect(SOVBalanceV1After).bignumber.equal(new BN(0));
+			expect(SOVBalanceV2After).bignumber.equal(SOVBalanceV1Before);
+		});
+	});
+
 	async function deployLiquidityMiningV1() {
 		let liquidityMiningLogicV1 = await LiquidityMiningLogicV1.new();
 		let liquidityMiningProxyV1 = await LiquidityMiningProxyV1.new();
@@ -218,7 +254,7 @@ describe("LiquidityMiningMigration", () => {
 
 	async function initializaAccountsTokensBalance() {
 		let amount = new BN(1000);
-
+		await SOVToken.mint(liquidityMiningV1.address, amount);
 		tokens.forEach((token) => {
 			accounts.forEach(async (account) => {
 				await token.mint(account, amount);
