@@ -5,9 +5,9 @@ import "../openzeppelin/ERC20.sol";
 import "../openzeppelin/SafeERC20.sol";
 import "../openzeppelin/SafeMath.sol";
 import "./LiquidityMiningStorageV1.sol";
-import "./ILiquidityMining.sol";
+import "./ILiquidityMiningV1.sol";
 
-contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
+contract LiquidityMiningV1 is ILiquidityMiningV1, LiquidityMiningStorageV1 {
 	using SafeMath for uint256;
 	using SafeERC20 for IERC20;
 

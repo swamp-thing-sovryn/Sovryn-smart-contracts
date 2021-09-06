@@ -6,7 +6,7 @@ import "../openzeppelin/SafeMath.sol";
 import "../locked/ILockedSOV.sol";
 import "../utils/AdminRole.sol";
 import "./IRewardTransferLogic.sol";
-import "./ILiquidityMining.sol";
+import "./ILiquidityMiningV1.sol";
 
 contract LiquidityMiningStorageV2 is AdminRole {
 	// Info of each user.
@@ -82,5 +82,5 @@ contract LiquidityMiningStorageV2 is AdminRole {
 	IERC20 public SOV;
 
 	//LiquidityMiningV1 contract address
-	ILiquidityMining liquidityMiningV1;
+	ILiquidityMiningV1 liquidityMiningV1;
 }

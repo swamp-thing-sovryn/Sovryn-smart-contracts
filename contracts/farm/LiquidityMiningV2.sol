@@ -6,6 +6,7 @@ import "../openzeppelin/SafeERC20.sol";
 import "../openzeppelin/SafeMath.sol";
 import "./LiquidityMiningStorageV2.sol";
 import "./IRewardTransferLogic.sol";
+import "./ILiquidityMining.sol";
 
 /// @notice This contract is a new liquidity mining version that let's the user
 ///         to earn multiple reward tokens by staking LP tokens as opposed to the
@@ -50,7 +51,7 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	 */
 	function initialize(
 		address _wrapper,
-		ILiquidityMining _liquidityMiningV1,
+		ILiquidityMiningV1 _liquidityMiningV1,
 		IERC20 _SOV
 	) external onlyAuthorized {
 		/// @dev Non-idempotent function. Must be called just once.
@@ -998,49 +999,4 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	function migrateFunds() external onlyAuthorized {
 		liquidityMiningV1.migrateFunds();
 	}
-
-	/**
-	 * @TODO delete functions after implement new LiquidityMiningV2 interface
-	 */
-
-	/**
-	 * @notice returns arrays with all the pools on the contract
-	 */
-	function getPoolInfoListArray()
-		external
-		view
-		returns (
-			address[] memory _poolToken,
-			uint96[] memory _allocationPoints,
-			uint256[] memory _lastRewardBlock,
-			uint256[] memory _accumulatedRewardPerShare
-		)
-	{
-		return (_poolToken, _allocationPoints, _lastRewardBlock, _accumulatedRewardPerShare);
-	}
-
-	/**
-	 * @notice returns all pools that a user has on the contract, the poolId it's the index of arrays
-	 * @param _user the address of the user
-	 */
-	function getUserInfoListArray(address _user)
-		external
-		view
-		returns (
-			uint256[] memory _amount,
-			uint256[] memory _rewardDebt,
-			uint256[] memory _accumulatedReward
-		)
-	{
-		return (_amount, _rewardDebt, _accumulatedReward);
-	}
-
-	/**
-	 * @notice reset user info from a pool, this function is called by LiquidityMiningV2 after migration
-	 * @param _user the addres of the user
-	 * @param _poolId the poolId to be reset
-	 */
-	function resetUser(address _user, uint256 _poolId) external onlyAuthorized {}
-
-	function finishMigrationGracePeriod() external {}
 }
