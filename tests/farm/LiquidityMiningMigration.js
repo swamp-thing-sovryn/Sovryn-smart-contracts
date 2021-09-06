@@ -93,35 +93,22 @@ describe("LiquidityMiningMigration", () => {
 	});
 
 	describe("initializeLiquidityMiningV1", () => {
-		beforeEach(async () => {
-			//create maps for access (account,token) => amount
-			accountsMap = new Map(accountDeposits.map((entry) => [entry.account, entry.deposit]));
-			depositsMap = new Map();
-			accountsMap.forEach((deposit, account) => {
-				map = depositsMap.set(account, new Map(deposit.map((entry) => [entry.token, entry.amount])));
-			});
-		});
-
 		it("should check all user deposits", async () => {
-			accounts.forEach(async (account) => {
-				const { _amount, _rewardDebt, _accumulatedReward } = await liquidityMiningV1.getUserInfoListArray(account);
-				for (let i = 0; i < _amount.length; i++) {
-					let { poolToken } = await liquidityMiningV1.poolInfoList(i);
-					if (depositsMap.has(account)) {
-						if (depositsMap.get(account).has(poolToken)) {
-							let amountDeposited = depositsMap.get(account).get(poolToken);
-							expect(_amount[i]).bignumber.equal(amountDeposited);
-						}
-					}
+			for (let i = 0; i < accountDeposits.length; i++) {
+				for (let j = 0; j < accountDeposits[i].deposit.length; j++) {
+					let poolToken = accountDeposits[i].deposit[j].token;
+					let poolId = await liquidityMiningV1.getPoolId(poolToken);
+					let { amount } = await liquidityMiningV1.userInfoMap(poolId, accountDeposits[i].account);
+					expect(amount).bignumber.equal(accountDeposits[i].deposit[j].amount);
 				}
-			});
+			}
 		});
 
 		it("should check all pool have been added", async () => {
 			const { _poolToken, _allocationPoints, _lastRewardBlock } = await liquidityMiningV1.getPoolInfoListArray();
-			for (let i = 0 ; i < tokens.length ; i++ ){
+			for (let i = 0; i < tokens.length; i++) {
 				expect(_poolToken[i]).equal(tokens[i].address);
-			};
+			}
 		});
 	});
 
@@ -129,14 +116,13 @@ describe("LiquidityMiningMigration", () => {
 		it("should only allow to migrat pools by the admin", async () => {
 			await expectRevert(liquidityMiningV2.migratePools({ from: account1 }), "unauthorized");
 		});
-		it("should add pools from liquidityMininigV1", async () =>{
+		it("should add pools from liquidityMininigV1", async () => {
 			await liquidityMiningV2.migratePools();
-			for (let i = 0 ; i < tokens.length ; i++ ){
+			for (let i = 0; i < tokens.length; i++) {
 				let poolToken = await liquidityMiningV2.poolInfoList(i);
 				expect(poolToken).equal(tokens[i].address);
-			};
+			}
 		});
-
 	});
 
 	async function deployLiquidityMiningV1() {
@@ -160,7 +146,7 @@ describe("LiquidityMiningMigration", () => {
 	async function initializeLiquidityMiningV1Pools() {
 		let allocationPoint = new BN(10);
 
-		for (let i = 0 ; i < tokens.length ; i++ ){
+		for (let i = 0; i < tokens.length; i++) {
 			await liquidityMiningV1.add(tokens[i].address, allocationPoint, false);
 		}
 	}
@@ -183,7 +169,6 @@ describe("LiquidityMiningMigration", () => {
 			});
 		});
 	}
-
 
 	function setAccountsDepositsConstants() {
 		accountDeposits = [
