@@ -108,7 +108,7 @@ describe("LiquidityMiningMigration", () => {
 		});
 
 		it("should check all pool have been added", async () => {
-			const { _poolToken, _allocationPoints, _lastRewardBlock } = await liquidityMiningV1.getPoolInfoListArray();
+			const { _poolToken } = await liquidityMiningV1.getPoolInfoListArray();
 			for (let i = 0; i < tokens.length; i++) {
 				expect(_poolToken[i]).equal(tokens[i].address);
 			}
@@ -138,6 +138,15 @@ describe("LiquidityMiningMigration", () => {
 				expect(allocationPointV2).bignumber.equal(allocationPointV1);
 				expect(lastRewardBlockV2).bignumber.equal(lastRewardBlockV1);
 				expect(accumulatedRewardPerShareV2).bignumber.equal(accumulatedRewardPerShareV1);
+
+				let { startBlock: startBlockV2, totalUsersBalance: totalUsersBalanceV2 } = await liquidityMiningV2.rewardTokensMap(
+					SOVToken.address
+				);
+				let startBlockV1 = await liquidityMiningV1.startBlock();
+				let totalUsersBalanceV1 = await liquidityMiningV1.totalUsersBalance();
+
+				expect(startBlockV2).bignumber.equal(startBlockV1);
+				expect(totalUsersBalanceV2).bignumber.equal(totalUsersBalanceV1);
 			}
 		});
 	});
@@ -189,7 +198,103 @@ describe("LiquidityMiningMigration", () => {
 			await liquidityMiningV2.migratePools();
 			await liquidityMiningV2.migrateUsers(randomAccounts);
 		});
-		it("should claim rewards after migration", async () => {});
+		it("should withdraw all before migration and revert trying to withdraw after", async () => {
+			await liquidityMiningV1.withdraw(accountDeposits[0].deposit[0].token, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
+				from: accountDeposits[0].account,
+			});
+
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migratePools();
+			await liquidityMiningV2.migrateUsers(accounts);
+			await liquidityMiningV2.migrateFunds();
+
+			await expectRevert(
+				liquidityMiningV2.withdraw(accountDeposits[0].deposit[0].token, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
+					from: accountDeposits[0].account,
+				}),
+				"Not enough balance"
+			);
+		});
+		it("should withdraw half before migration and withdraw the other half after", async () => {
+			tokenBalanceBefore = await token1.balanceOf(accountDeposits[0].account);
+			await liquidityMiningV1.withdraw(
+				accountDeposits[0].deposit[0].token,
+				accountDeposits[0].deposit[0].amount.div(new BN(2)),
+				ZERO_ADDRESS,
+				{ from: accountDeposits[0].account }
+			);
+
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migratePools();
+			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
+			await liquidityMiningV2.migrateFunds();
+			await liquidityMiningV2.withdraw(
+				accountDeposits[0].deposit[0].token,
+				accountDeposits[0].deposit[0].amount.div(new BN(2)),
+				ZERO_ADDRESS,
+				{ from: accountDeposits[0].account }
+			);
+
+			tokenBalanceAfter = await token1.balanceOf(accountDeposits[0].account);
+
+			expect(tokenBalanceAfter.sub(tokenBalanceBefore)).bignumber.equal(accountDeposits[0].deposit[0].amount);
+		});
+		it("should withdraw all before migration, migrate, deposit and withdraw all again", async () => {
+			//Re-initialization of liquidity mining contracts
+			await deployLiquidityMiningV1();
+			await liquidityMiningV1.initialize(
+				SOVToken.address,
+				rewardTokensPerBlock,
+				startDelayBlocks,
+				new BN(0),
+				wrapper.address,
+				lockedSOV.address,
+				new BN(0)
+			);
+			await deployLiquidityMiningV2();
+			await liquidityMiningV2.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
+
+			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
+			await rewardTransferLogic.initialize(lockedSOV.address, new BN(0));
+
+			await liquidityMiningV2.addRewardToken(SOVToken.address, rewardTokensPerBlock, startDelayBlocks, rewardTransferLogic.address);
+
+			await liquidityMiningV1.add(accountDeposits[0].deposit[0].token, allocationPoint, false);
+
+			await SOVToken.mint(liquidityMiningV1.address, new BN(1000));
+
+			await token1.approve(liquidityMiningV1.address, accountDeposits[0].deposit[0].amount, { from: accountDeposits[0].account });
+			await liquidityMiningV1.deposit(token1.address, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
+				from: accountDeposits[0].account,
+			});
+			await mineBlocks(20);
+
+			await liquidityMiningV1.withdraw(token1.address, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
+				from: accountDeposits[0].account,
+			});
+			let balanceLockedBefore = await lockedSOV.getLockedBalance(accountDeposits[0].account);
+
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migratePools();
+			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
+			await liquidityMiningV2.migrateFunds();
+
+			await token1.approve(liquidityMiningV2.address, accountDeposits[0].deposit[0].amount, { from: accountDeposits[0].account });
+			await liquidityMiningV2.deposit(token1.address, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
+				from: accountDeposits[0].account,
+			});
+			await mineBlocks(20);
+
+			await liquidityMiningV2.withdraw(token1.address, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
+				from: accountDeposits[0].account,
+			});
+			let balanceLockedAfter = await lockedSOV.getLockedBalance(accountDeposits[0].account);
+
+			expect(balanceLockedAfter).bignumber.equal(balanceLockedBefore.mul(new BN(2)));
+		});
 	});
 
 	describe("migrateFunds", () => {
@@ -282,14 +387,6 @@ describe("LiquidityMiningMigration", () => {
 		return randomAccounts;
 	}
 
-	async function checkUserReward(user, poolToken, depositBlockNumber, latestBlockNumber) {
-		let passedBlocks = latestBlockNumber.sub(depositBlockNumber);
-		let userReward = passedBlocks.mul(rewardTokensPerBlock);
-		let userInfo = await liquidityMining.getUserInfo(poolToken.address, user);
-		expect(userInfo.rewards[0].accumulatedReward).bignumber.equal(new BN(0));
-		return userReward;
-	}
-
 	function setAccountsDepositsConstants() {
 		accountDeposits = [
 			{
@@ -298,7 +395,7 @@ describe("LiquidityMiningMigration", () => {
 				deposit: [
 					{
 						token: token1.address,
-						amount: new BN(10),
+						amount: new BN(100),
 					},
 					{
 						token: token2.address,
@@ -368,7 +465,7 @@ describe("LiquidityMiningMigration", () => {
 				deposit: [
 					{
 						token: token8.address,
-						amount: new BN(25),
+						amount: new BN(1000),
 					},
 				],
 			},

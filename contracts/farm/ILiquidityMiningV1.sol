@@ -35,4 +35,8 @@ interface ILiquidityMiningV1 {
 	function migrateFunds() external;
 
 	function finishMigrationGracePeriod() external;
+
+	function getTotalUsersBalance() external view returns (uint256);
+
+	function getStartBlock() external view returns (uint256);
 }

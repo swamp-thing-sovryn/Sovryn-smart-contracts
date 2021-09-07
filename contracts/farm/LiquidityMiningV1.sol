@@ -783,4 +783,18 @@ contract LiquidityMiningV1 is ILiquidityMiningV1, LiquidityMiningStorageV1 {
 			poolToken.safeTransfer(msg.sender, balancePoolToken);
 		}
 	}
+
+	/**
+	 * @notice return reward token total users balance
+	 */
+	function getTotalUsersBalance() external view returns (uint256) {
+		return totalUsersBalance;
+	}
+
+	/**
+	 * @notice return reward token start block
+	 */
+	function getStartBlock() external view returns (uint256) {
+		return startBlock;
+	}
 }

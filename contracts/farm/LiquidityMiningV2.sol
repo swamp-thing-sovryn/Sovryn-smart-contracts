@@ -964,8 +964,10 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 			//add pool function put lastRewardBlock with current block number value, so we need to retrieve the original
 			poolInfoRewardToken.lastRewardBlock = lastRewardBlock;
 			poolInfoRewardToken.accumulatedRewardPerShare = accumulatedRewardPerShare;
-			//_updatePool(poolId);
 		}
+		RewardToken storage rewardToken = rewardTokensMap[address(SOV)];
+		rewardToken.startBlock = liquidityMiningV1.getStartBlock();
+		rewardToken.totalUsersBalance = liquidityMiningV1.getTotalUsersBalance();
 	}
 
 	/**
@@ -998,5 +1000,6 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	 */
 	function migrateFunds() external onlyAuthorized {
 		liquidityMiningV1.migrateFunds();
+		updateAllPools();
 	}
 }
