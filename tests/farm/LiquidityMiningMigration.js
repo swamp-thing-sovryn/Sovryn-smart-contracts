@@ -217,6 +217,8 @@ describe("LiquidityMiningMigration", () => {
 			);
 		});
 		it("should withdraw half before migration and withdraw the other half after", async () => {
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
 			tokenBalanceBefore = await token1.balanceOf(accountDeposits[0].account);
 			await liquidityMiningV1.withdraw(
 				accountDeposits[0].deposit[0].token,
@@ -225,8 +227,6 @@ describe("LiquidityMiningMigration", () => {
 				{ from: accountDeposits[0].account }
 			);
 
-			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
-			await liquidityMiningV1.startMigrationGracePeriod();
 			await liquidityMiningV2.migratePools();
 			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
 			await liquidityMiningV2.migrateFunds();
@@ -294,6 +294,157 @@ describe("LiquidityMiningMigration", () => {
 			let balanceLockedAfter = await lockedSOV.getLockedBalance(accountDeposits[0].account);
 
 			expect(balanceLockedAfter).bignumber.equal(balanceLockedBefore.mul(new BN(2)));
+		});
+		it("should get rewards in liquidity mining V2 after migration", async () => {
+			//Re-initialization of liquidity mining contracts
+			await deployLiquidityMiningV1();
+			await liquidityMiningV1.initialize(
+				SOVToken.address,
+				rewardTokensPerBlock,
+				startDelayBlocks,
+				new BN(0),
+				wrapper.address,
+				lockedSOV.address,
+				new BN(0)
+			);
+			await deployLiquidityMiningV2();
+			await liquidityMiningV2.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
+
+			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
+			await rewardTransferLogic.initialize(lockedSOV.address, new BN(0));
+
+			await liquidityMiningV2.addRewardToken(SOVToken.address, rewardTokensPerBlock, startDelayBlocks, rewardTransferLogic.address);
+
+			await liquidityMiningV1.add(accountDeposits[0].deposit[0].token, allocationPoint, false);
+
+			await SOVToken.mint(liquidityMiningV1.address, new BN(1000));
+
+			await token1.approve(liquidityMiningV1.address, accountDeposits[0].deposit[0].amount, { from: accountDeposits[0].account });
+			await liquidityMiningV1.deposit(token1.address, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
+				from: accountDeposits[0].account,
+			});
+			await mineBlocks(1);
+
+			tx = await liquidityMiningV1.withdraw(token1.address, accountDeposits[0].deposit[0].amount.div(new BN(2)), ZERO_ADDRESS, {
+				from: accountDeposits[0].account,
+			});
+			let blockStart = tx.receipt.blockNumber;
+			let balanceLockedBefore = await lockedSOV.getLockedBalance(accountDeposits[0].account);
+
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+
+			await mineBlocks(10);
+
+			await liquidityMiningV2.migratePools();
+			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
+			await liquidityMiningV2.migrateFunds();
+
+			tx = await liquidityMiningV2.withdraw(token1.address, accountDeposits[0].deposit[0].amount.div(new BN(2)), ZERO_ADDRESS, {
+				from: accountDeposits[0].account,
+			});
+			let blockEnd = tx.receipt.blockNumber;
+			let passedBlocks = new BN(blockEnd - blockStart);
+			let reward = passedBlocks.mul(rewardTokensPerBlock);
+			let balanceLockedAfter = await lockedSOV.getLockedBalance(accountDeposits[0].account);
+
+			expect(balanceLockedAfter).bignumber.equal(balanceLockedBefore.add(reward));
+		});
+		it("should migrate rewards", async () => {
+			//Re-initialization of liquidity mining contracts
+			await deployLiquidityMiningV1();
+			await liquidityMiningV1.initialize(
+				SOVToken.address,
+				rewardTokensPerBlock,
+				startDelayBlocks,
+				new BN(0),
+				wrapper.address,
+				lockedSOV.address,
+				new BN(0)
+			);
+			await deployLiquidityMiningV2();
+			await liquidityMiningV2.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
+
+			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
+			await rewardTransferLogic.initialize(lockedSOV.address, new BN(0));
+
+			await liquidityMiningV2.addRewardToken(SOVToken.address, rewardTokensPerBlock, startDelayBlocks, rewardTransferLogic.address);
+
+			await liquidityMiningV1.add(accountDeposits[0].deposit[0].token, allocationPoint, false);
+
+			await SOVToken.mint(liquidityMiningV1.address, new BN(1000));
+
+			await token1.approve(liquidityMiningV1.address, accountDeposits[0].deposit[0].amount, { from: accountDeposits[0].account });
+			await liquidityMiningV1.deposit(token1.address, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
+				from: accountDeposits[0].account,
+			});
+			await mineBlocks(10);
+
+			await liquidityMiningV1.claimReward(token1.address, ZERO_ADDRESS, { from: accountDeposits[0].account });
+			let { rewardDebt: rewardDebtBefore } = await liquidityMiningV1.userInfoMap(0, accountDeposits[0].account);
+
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migratePools();
+			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
+			await liquidityMiningV2.migrateFunds();
+
+			let userInfoV2 = await liquidityMiningV2.getUserInfo(token1.address, accountDeposits[0].account);
+			let rewardDebtAfter = userInfoV2.rewards[0].rewardDebt;
+
+			expect(rewardDebtAfter).bignumber.equal(rewardDebtBefore);
+		});
+		it("should be able to claim rewards after migration", async () => {
+			//Re-initialization of liquidity mining contracts
+			await deployLiquidityMiningV1();
+			await liquidityMiningV1.initialize(
+				SOVToken.address,
+				rewardTokensPerBlock,
+				startDelayBlocks,
+				new BN(0),
+				wrapper.address,
+				lockedSOV.address,
+				new BN(0)
+			);
+			await deployLiquidityMiningV2();
+			await liquidityMiningV2.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
+
+			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
+			await rewardTransferLogic.initialize(lockedSOV.address, new BN(0));
+
+			await liquidityMiningV2.addRewardToken(SOVToken.address, rewardTokensPerBlock, startDelayBlocks, rewardTransferLogic.address);
+
+			await liquidityMiningV1.add(accountDeposits[0].deposit[0].token, allocationPoint, false);
+
+			await SOVToken.mint(liquidityMiningV1.address, new BN(1000));
+
+			await token1.approve(liquidityMiningV1.address, accountDeposits[0].deposit[0].amount, { from: accountDeposits[0].account });
+			await liquidityMiningV1.deposit(token1.address, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
+				from: accountDeposits[0].account,
+			});
+			await mineBlocks(10);
+
+			tx = await liquidityMiningV1.claimReward(token1.address, ZERO_ADDRESS, { from: accountDeposits[0].account });
+			let blockStart = tx.receipt.blockNumber;
+			let { rewardDebt: rewardDebtBefore } = await liquidityMiningV1.userInfoMap(0, accountDeposits[0].account);
+
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+
+			await mineBlocks(10);
+
+			await liquidityMiningV2.migratePools();
+			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
+			await liquidityMiningV2.migrateFunds();
+
+			tx = await liquidityMiningV2.claimRewards(token1.address, ZERO_ADDRESS, { from: accountDeposits[0].account });
+			let blockEnd = tx.receipt.blockNumber;
+			let passedBlocks = new BN(blockEnd - blockStart);
+			let rewardDebt = passedBlocks.mul(rewardTokensPerBlock);
+			let userInfoV2 = await liquidityMiningV2.getUserInfo(token1.address, accountDeposits[0].account);
+			let rewardDebtAfter = userInfoV2.rewards[0].rewardDebt;
+
+			expect(rewardDebtAfter).bignumber.equal(rewardDebtBefore.add(rewardDebt));
 		});
 	});
 
