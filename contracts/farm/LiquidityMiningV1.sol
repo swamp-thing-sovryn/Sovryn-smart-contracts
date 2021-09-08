@@ -41,6 +41,11 @@ contract LiquidityMiningV1 is ILiquidityMiningV1, LiquidityMiningStorageV1 {
 		_;
 	}
 
+	modifier onlyAfterMigrationFinished() {
+		require(migrationGracePeriodState == MigrationGracePeriodStates.Finished, "Forbidden: migration is not over yet");
+		_;
+	}
+
 	/* Functions */
 
 	/**
@@ -129,8 +134,8 @@ contract LiquidityMiningV1 is ILiquidityMiningV1, LiquidityMiningStorageV1 {
 	// TODO: this should only be used by the LiquidityMiningV2 contract??
 	/// @notice This function finishes the migration process disabling further withdrawals and claims
 	/// @dev migration grace period should have started before this function is called.
-	function finishMigrationGracePeriod() external onlyAuthorized onlyBeforeMigrationGracePeriodFinished {
-		require(migrationGracePeriodState == MigrationGracePeriodStates.Started, "Migration hasn't started yet");
+	function finishMigrationGracePeriod() external onlyAuthorized {
+		require(migrationGracePeriodState >= MigrationGracePeriodStates.Started, "Migration hasn't started yet");
 		migrationGracePeriodState = MigrationGracePeriodStates.Finished;
 	}
 
@@ -773,7 +778,7 @@ contract LiquidityMiningV1 is ILiquidityMiningV1, LiquidityMiningStorageV1 {
 	/**
 	 * @notice send all funds from this contract to LiquidityMiningV2
 	 */
-	function migrateFunds() external onlyAuthorized {
+	function migrateFunds() external onlyAuthorized onlyAfterMigrationFinished {
 		uint256 SOVBalance = SOV.balanceOf(address(this));
 		transferSOV(msg.sender, SOVBalance);
 		uint256 length = poolInfoList.length;

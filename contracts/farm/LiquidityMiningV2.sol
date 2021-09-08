@@ -950,6 +950,7 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 		require(_poolToken.length == _allocationPoints.length, "Arrays mismatch");
 		require(_poolToken.length == _lastRewardBlock.length, "Arrays mismatch");
 
+		liquidityMiningV1.finishMigrationGracePeriod();
 		for (uint256 i = 0; i < _poolToken.length; i++) {
 			address poolToken = _poolToken[i];
 			uint96[] memory allocationPoints = new uint96[](1);
@@ -1003,8 +1004,8 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	 */
 	function migrateFunds() external onlyAuthorized {
 		require(!migrationFinished, "Migration has already ended");
+		liquidityMiningV1.finishMigrationGracePeriod();
 		liquidityMiningV1.migrateFunds();
-		updateAllPools();
 	}
 
 	/**

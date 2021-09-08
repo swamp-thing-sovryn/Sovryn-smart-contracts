@@ -119,11 +119,20 @@ describe("LiquidityMiningMigration", () => {
 		it("should only allow to migrate pools by the admin", async () => {
 			await expectRevert(liquidityMiningV2.migratePools({ from: account1 }), "unauthorized");
 		});
+		it("should fail if liquidity mining V2 contract was not added as admin", async () => {
+			await expectRevert(liquidityMiningV2.migratePools(), "unauthorized");
+		});
 		it("should only allow to migrate pools if migration is not finished", async () => {
 			await liquidityMiningV2.finishMigration();
 			await expectRevert(liquidityMiningV2.migratePools(), "Migration has already ended");
 		});
+		it("should only allow to migrate pools if the migrate grace period started", async () => {
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await expectRevert(liquidityMiningV2.migratePools(), "Migration hasn't started yet");
+		});
 		it("should add pools from liquidityMininigV1", async () => {
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
 			await liquidityMiningV2.migratePools();
 			for (let i = 0; i < tokens.length; i++) {
 				let poolToken = await liquidityMiningV2.poolInfoList(i);
@@ -464,6 +473,10 @@ describe("LiquidityMiningMigration", () => {
 		it("should fail if liquidity mining V2 contract was not added as admin", async () => {
 			await expectRevert(liquidityMiningV2.migrateFunds(), "unauthorized");
 		});
+		it("should only allow to migrate funds if the migrate grace period started", async () => {
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await expectRevert(liquidityMiningV2.migrateFunds(), "Migration hasn't started yet");
+		});
 		it("should only allow to migrate funds if migration is not finished", async () => {
 			await liquidityMiningV2.finishMigration();
 			await expectRevert(liquidityMiningV2.migrateFunds(), "Migration has already ended");
@@ -480,6 +493,7 @@ describe("LiquidityMiningMigration", () => {
 			}
 			expect(SOVBalanceV2Before).bignumber.equal(new BN(0));
 			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
 			await liquidityMiningV2.migrateFunds();
 
 			let SOVBalanceV1After = await SOVToken.balanceOf(liquidityMiningV1.address);
