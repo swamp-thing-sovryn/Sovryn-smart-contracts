@@ -119,6 +119,10 @@ describe("LiquidityMiningMigration", () => {
 		it("should only allow to migrate pools by the admin", async () => {
 			await expectRevert(liquidityMiningV2.migratePools({ from: account1 }), "unauthorized");
 		});
+		it("should only allow to migrate pools if migration is not finished", async () => {
+			await liquidityMiningV2.finishMigration();
+			await expectRevert(liquidityMiningV2.migratePools(), "Migration has already ended");
+		});
 		it("should add pools from liquidityMininigV1", async () => {
 			await liquidityMiningV2.migratePools();
 			for (let i = 0; i < tokens.length; i++) {
@@ -161,6 +165,10 @@ describe("LiquidityMiningMigration", () => {
 		it("should only allow to migrate users if the migrate grace period started", async () => {
 			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
 			await expectRevert(liquidityMiningV2.migrateUsers(accounts), "Migration hasn't started yet");
+		});
+		it("should only allow to migrate users if migration is not finished", async () => {
+			await liquidityMiningV2.finishMigration();
+			await expectRevert(liquidityMiningV2.migrateUsers(accounts), "Migration has already ended");
 		});
 		it("should migrate all accounts with deposits from liquidityMininigV1", async () => {
 			let userInfoV1Before = [];
@@ -281,6 +289,7 @@ describe("LiquidityMiningMigration", () => {
 			await liquidityMiningV2.migratePools();
 			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
 			await liquidityMiningV2.migrateFunds();
+			await liquidityMiningV2.finishMigration();
 
 			await token1.approve(liquidityMiningV2.address, accountDeposits[0].deposit[0].amount, { from: accountDeposits[0].account });
 			await liquidityMiningV2.deposit(token1.address, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
@@ -454,6 +463,10 @@ describe("LiquidityMiningMigration", () => {
 		});
 		it("should fail if liquidity mining V2 contract was not added as admin", async () => {
 			await expectRevert(liquidityMiningV2.migrateFunds(), "unauthorized");
+		});
+		it("should only allow to migrate funds if migration is not finished", async () => {
+			await liquidityMiningV2.finishMigration();
+			await expectRevert(liquidityMiningV2.migrateFunds(), "Migration has already ended");
 		});
 		it("should migrate funds from liquidityMiningV1", async () => {
 			let SOVBalanceV1Before = await SOVToken.balanceOf(liquidityMiningV1.address);

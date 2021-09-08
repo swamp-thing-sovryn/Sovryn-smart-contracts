@@ -492,6 +492,7 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 		uint256 _amount,
 		address _user
 	) external {
+		require(migrationFinished, "Migration is not over yet");
 		_deposit(_poolToken, _amount, _user, false);
 	}
 
@@ -945,6 +946,7 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 			uint256[] memory _accumulatedRewardPerShare
 		) = liquidityMiningV1.getPoolInfoListArray();
 
+		require(!migrationFinished, "Migration has already ended");
 		require(_poolToken.length == _allocationPoints.length, "Arrays mismatch");
 		require(_poolToken.length == _lastRewardBlock.length, "Arrays mismatch");
 
@@ -975,6 +977,7 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	 * @param _users a list of users to be copied
 	 */
 	function migrateUsers(address[] calldata _users) external onlyAuthorized {
+		require(!migrationFinished, "Migration has already ended");
 		liquidityMiningV1.finishMigrationGracePeriod();
 		for (uint256 i = 0; i < _users.length; i++) {
 			(uint256[] memory _amount, uint256[] memory _rewardDebt, uint256[] memory _accumulatedReward) =
@@ -999,7 +1002,15 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	 * @notice transfer all funds from liquidity mining V1
 	 */
 	function migrateFunds() external onlyAuthorized {
+		require(!migrationFinished, "Migration has already ended");
 		liquidityMiningV1.migrateFunds();
 		updateAllPools();
+	}
+
+	/**
+	 * @notice finish migration
+	 */
+	function finishMigration() external onlyAuthorized {
+		migrationFinished = true;
 	}
 }

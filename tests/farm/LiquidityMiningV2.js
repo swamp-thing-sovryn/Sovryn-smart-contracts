@@ -73,6 +73,7 @@ describe("LiquidityMiningV2", () => {
 
 		await liquidityMining.setWrapper(wrapper.address);
 		await liquidityMining.addRewardToken(SOVToken.address, rewardTokensPerBlock, startDelayBlocks, rewardTransferLogic.address);
+		await liquidityMining.finishMigration();
 	});
 
 	describe("initialize", () => {
@@ -544,7 +545,16 @@ describe("LiquidityMiningV2", () => {
 			await token1.mint(account1, amount);
 			await token1.approve(liquidityMining.address, amount, { from: account1 });
 		});
+		it("should only allow to deposit if migration is finished", async () => {
+			await deployLiquidityMining();
+			await liquidityMining.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
+			await liquidityMining.addRewardToken(SOVToken.address, rewardTokensPerBlock, startDelayBlocks, rewardTransferLogic.address);
 
+			await expectRevert(
+				liquidityMining.deposit(token1.address, amount, ZERO_ADDRESS, { from: account1 }),
+				"Migration is not over yet"
+			);
+		});
 		it("should be able to deposit", async () => {
 			let tx = await liquidityMining.deposit(token1.address, amount, ZERO_ADDRESS, { from: account1 });
 
@@ -1502,6 +1512,7 @@ describe("LiquidityMiningV2", () => {
 			await rewardTransferLogic.initialize(lockedSOV.address, unlockedImmediatelyPercent);
 
 			await liquidityMining.addRewardToken(SOVToken.address, REWARD_TOKENS_PER_BLOCK, startDelayBlocks, rewardTransferLogic.address);
+			await liquidityMining.finishMigration();
 		});
 
 		it("dummy pool + 1 pool", async () => {

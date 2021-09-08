@@ -83,4 +83,6 @@ contract LiquidityMiningStorageV2 is AdminRole {
 
 	//LiquidityMiningV1 contract address
 	ILiquidityMiningV1 liquidityMiningV1;
+
+	bool migrationFinished;
 }
