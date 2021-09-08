@@ -989,12 +989,14 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 
 			address user = _users[i];
 
+			require(userMigrated[user] == false, "User already migrated");
+			userMigrated[user] = true;
+
 			for (uint256 j = 0; j < _amount.length; j++) {
 				uint256 poolId = j;
 				UserInfo storage userInfo = userInfoMap[poolId][user];
 				userInfo.amount = _amount[j];
 				userInfo.rewards[address(SOV)] = UserReward(_rewardDebt[j], _accumulatedReward[j]);
-				liquidityMiningV1.resetUser(user, poolId);
 			}
 		}
 	}

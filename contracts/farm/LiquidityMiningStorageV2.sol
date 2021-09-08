@@ -85,4 +85,7 @@ contract LiquidityMiningStorageV2 is AdminRole {
 	ILiquidityMiningV1 liquidityMiningV1;
 
 	bool migrationFinished;
+
+	/// @dev it is true if the user has been already migrated
+	mapping(address => bool) public userMigrated;
 }

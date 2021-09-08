@@ -85,6 +85,8 @@ describe("LiquidityMiningMigration", () => {
 
 		await liquidityMiningV2.addRewardToken(SOVToken.address, rewardTokensPerBlock, startDelayBlocks, rewardTransferLogic.address);
 
+		await liquidityMiningV1.setLiquidityMiningV2(liquidityMiningV2.address);
+
 		//set accounts deposits pools in liquidity mining V1
 		setAccountsDepositsConstants();
 		//mint some tokens to all the accounts
@@ -106,16 +108,28 @@ describe("LiquidityMiningMigration", () => {
 				}
 			}
 		});
-
 		it("should check all pool have been added", async () => {
 			const { _poolToken } = await liquidityMiningV1.getPoolInfoListArray();
 			for (let i = 0; i < tokens.length; i++) {
 				expect(_poolToken[i]).equal(tokens[i].address);
 			}
 		});
+		it("should fail if liquidity mining V2 addres is invalid", async () => {
+			await deployLiquidityMiningV1();
+			await liquidityMiningV1.initialize(
+				SOVToken.address,
+				rewardTokensPerBlock,
+				startDelayBlocks,
+				numberOfBonusBlocks,
+				wrapper.address,
+				lockedSOV.address,
+				unlockedImmediatelyPercent
+			);
+			await expectRevert(liquidityMiningV1.setLiquidityMiningV2(ZERO_ADDRESS), "Invalid address");
+		});
 	});
 
-	describe("MigratePools", () => {
+	describe("migratePools", () => {
 		it("should only allow to migrate pools by the admin", async () => {
 			await expectRevert(liquidityMiningV2.migratePools({ from: account1 }), "unauthorized");
 		});
@@ -129,6 +143,12 @@ describe("LiquidityMiningMigration", () => {
 		it("should only allow to migrate pools if the migrate grace period started", async () => {
 			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
 			await expectRevert(liquidityMiningV2.migratePools(), "Migration hasn't started yet");
+		});
+		it("should only allow to migrate pools once", async () => {
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migratePools();
+			await expectRevert(liquidityMiningV2.migratePools(), "Token already added");
 		});
 		it("should add pools from liquidityMininigV1", async () => {
 			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
@@ -164,7 +184,7 @@ describe("LiquidityMiningMigration", () => {
 		});
 	});
 
-	describe("MigrateUsers", () => {
+	describe("migrateUsers", () => {
 		it("should only allow to migrate users by the admin", async () => {
 			await expectRevert(liquidityMiningV2.migrateUsers(accounts, { from: account1 }), "unauthorized");
 		});
@@ -179,13 +199,47 @@ describe("LiquidityMiningMigration", () => {
 			await liquidityMiningV2.finishMigration();
 			await expectRevert(liquidityMiningV2.migrateUsers(accounts), "Migration has already ended");
 		});
-		it("should migrate all accounts with deposits from liquidityMininigV1", async () => {
-			let userInfoV1Before = [];
+		it("should only allow to migrate users once", async () => {
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migrateUsers(accounts);
+			await expectRevert(liquidityMiningV2.migrateUsers(accounts), "User already migrated");
+		});
+		it("should be able to migrate users in differents tx", async () => {
+			let userInfoV1 = [];
 			for (let i = 0; i < tokens.length; i++) {
-				userInfoV1Before[i] = [];
+				userInfoV1[i] = [];
 				for (let j = 0; j < accountDeposits.length; j++) {
 					let userInfo = await liquidityMiningV1.getUserInfo(tokens[i].address, accountDeposits[j].account);
-					userInfoV1Before[i][j] = userInfo;
+					userInfoV1[i][j] = userInfo;
+				}
+			}
+
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migratePools();
+			let halfLength = accounts.length / 2;
+			await liquidityMiningV2.migrateUsers(accounts.slice(0, halfLength));
+			await liquidityMiningV2.migrateUsers(accounts.slice(-halfLength));
+
+			for (let i = 0; i < tokens.length; i++) {
+				for (let j = 0; j < accountDeposits.length; j++) {
+					let userInfoV2 = await liquidityMiningV2.getUserInfo(tokens[i].address, accountDeposits[j].account);
+
+					expect(userInfoV2.amount).bignumber.equal(userInfoV1[i][j].amount);
+					expect(userInfoV2.rewards[0].rewardDebt).bignumber.equal(userInfoV1[i][j].rewardDebt);
+					expect(userInfoV2.rewards[0].accumulatedReward).bignumber.equal(userInfoV1[i][j].accumulatedReward);
+				}
+			}
+		});
+
+		it("should migrate all accounts with deposits from liquidityMininigV1", async () => {
+			let userInfoV1 = [];
+			for (let i = 0; i < tokens.length; i++) {
+				userInfoV1[i] = [];
+				for (let j = 0; j < accountDeposits.length; j++) {
+					let userInfo = await liquidityMiningV1.getUserInfo(tokens[i].address, accountDeposits[j].account);
+					userInfoV1[i][j] = userInfo;
 				}
 			}
 
@@ -196,15 +250,11 @@ describe("LiquidityMiningMigration", () => {
 
 			for (let i = 0; i < tokens.length; i++) {
 				for (let j = 0; j < accountDeposits.length; j++) {
-					let userInfoV1 = await liquidityMiningV1.getUserInfo(tokens[i].address, accountDeposits[j].account);
 					let userInfoV2 = await liquidityMiningV2.getUserInfo(tokens[i].address, accountDeposits[j].account);
 
-					expect(userInfoV2.amount).bignumber.equal(userInfoV1Before[i][j].amount);
-					expect(userInfoV2.rewards[0].rewardDebt).bignumber.equal(userInfoV1Before[i][j].rewardDebt);
-					expect(userInfoV2.rewards[0].accumulatedReward).bignumber.equal(userInfoV1Before[i][j].accumulatedReward);
-					expect(userInfoV1.amount).bignumber.equal(new BN(0));
-					expect(userInfoV1.rewardDebt).bignumber.equal(new BN(0));
-					expect(userInfoV1.accumulatedReward).bignumber.equal(new BN(0));
+					expect(userInfoV2.amount).bignumber.equal(userInfoV1[i][j].amount);
+					expect(userInfoV2.rewards[0].rewardDebt).bignumber.equal(userInfoV1[i][j].rewardDebt);
+					expect(userInfoV2.rewards[0].accumulatedReward).bignumber.equal(userInfoV1[i][j].accumulatedReward);
 				}
 			}
 		});
@@ -215,6 +265,78 @@ describe("LiquidityMiningMigration", () => {
 			await liquidityMiningV2.migratePools();
 			await liquidityMiningV2.migrateUsers(randomAccounts);
 		});
+	});
+
+	describe("migrateFunds", () => {
+		it("should only allow to migrate funds by the admin", async () => {
+			await expectRevert(liquidityMiningV2.migrateFunds({ from: account1 }), "unauthorized");
+		});
+		it("should fail if liquidity mining V2 contract was not added as admin", async () => {
+			await expectRevert(liquidityMiningV2.migrateFunds(), "unauthorized");
+		});
+		it("should only allow to migrate funds if the migrate grace period started", async () => {
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await expectRevert(liquidityMiningV2.migrateFunds(), "Migration hasn't started yet");
+		});
+		it("should only allow to migrate funds if migration is not finished", async () => {
+			await liquidityMiningV2.finishMigration();
+			await expectRevert(liquidityMiningV2.migrateFunds(), "Migration has already ended");
+		});
+		it("should fail if migrate funds without balance in liquidity mining V1", async () => {
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migrateFunds();
+			await expectRevert(liquidityMiningV2.migrateFunds(), "Amount invalid");
+		});
+		it("should fail if liquidity mining V2 is not initialized in liquidity mining V1", async () => {
+			await deployLiquidityMiningV1();
+			await liquidityMiningV1.initialize(
+				SOVToken.address,
+				rewardTokensPerBlock,
+				startDelayBlocks,
+				numberOfBonusBlocks,
+				wrapper.address,
+				lockedSOV.address,
+				unlockedImmediatelyPercent
+			);
+			await deployLiquidityMiningV2();
+			await liquidityMiningV2.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
+
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await expectRevert(liquidityMiningV2.migrateFunds(), "Address not initialized");
+		});
+		it("should migrate funds from liquidityMiningV1", async () => {
+			let SOVBalanceV1Before = await SOVToken.balanceOf(liquidityMiningV1.address);
+			let SOVBalanceV2Before = await SOVToken.balanceOf(liquidityMiningV2.address);
+			let tokenBalancesV1Before = [];
+			let tokenBalancesV2Before = [];
+			for (let i = 0; i < tokens.length; i++) {
+				tokenBalancesV1Before.push(await tokens[i].balanceOf(liquidityMiningV1.address));
+				tokenBalancesV2Before.push(await tokens[i].balanceOf(liquidityMiningV2.address));
+				expect(tokenBalancesV2Before[i]).bignumber.equal(new BN(0));
+			}
+			expect(SOVBalanceV2Before).bignumber.equal(new BN(0));
+			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
+			await liquidityMiningV1.startMigrationGracePeriod();
+			await liquidityMiningV2.migrateFunds();
+
+			let SOVBalanceV1After = await SOVToken.balanceOf(liquidityMiningV1.address);
+			let SOVBalanceV2After = await SOVToken.balanceOf(liquidityMiningV2.address);
+			let tokenBalancesV1After = [];
+			let tokenBalancesV2After = [];
+			for (let i = 0; i < tokens.length; i++) {
+				tokenBalancesV1After.push(await tokens[i].balanceOf(liquidityMiningV1.address));
+				tokenBalancesV2After.push(await tokens[i].balanceOf(liquidityMiningV2.address));
+				expect(tokenBalancesV1After[i]).bignumber.equal(new BN(0));
+				expect(tokenBalancesV2After[i]).bignumber.equal(tokenBalancesV1Before[i]);
+			}
+			expect(SOVBalanceV1After).bignumber.equal(new BN(0));
+			expect(SOVBalanceV2After).bignumber.equal(SOVBalanceV1Before);
+		});
+	});
+
+	describe("withdraws", () => {
 		it("should withdraw all before migration and revert trying to withdraw after", async () => {
 			await liquidityMiningV1.withdraw(accountDeposits[0].deposit[0].token, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
 				from: accountDeposits[0].account,
@@ -272,6 +394,7 @@ describe("LiquidityMiningMigration", () => {
 			);
 			await deployLiquidityMiningV2();
 			await liquidityMiningV2.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
+			await liquidityMiningV1.setLiquidityMiningV2(liquidityMiningV2.address);
 
 			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
 			await rewardTransferLogic.initialize(lockedSOV.address, new BN(0));
@@ -327,6 +450,7 @@ describe("LiquidityMiningMigration", () => {
 			);
 			await deployLiquidityMiningV2();
 			await liquidityMiningV2.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
+			await liquidityMiningV1.setLiquidityMiningV2(liquidityMiningV2.address);
 
 			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
 			await rewardTransferLogic.initialize(lockedSOV.address, new BN(0));
@@ -382,6 +506,7 @@ describe("LiquidityMiningMigration", () => {
 			);
 			await deployLiquidityMiningV2();
 			await liquidityMiningV2.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
+			await liquidityMiningV1.setLiquidityMiningV2(liquidityMiningV2.address);
 
 			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
 			await rewardTransferLogic.initialize(lockedSOV.address, new BN(0));
@@ -426,6 +551,7 @@ describe("LiquidityMiningMigration", () => {
 			);
 			await deployLiquidityMiningV2();
 			await liquidityMiningV2.initialize(wrapper.address, liquidityMiningV1.address, SOVToken.address);
+			await liquidityMiningV1.setLiquidityMiningV2(liquidityMiningV2.address);
 
 			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
 			await rewardTransferLogic.initialize(lockedSOV.address, new BN(0));
@@ -463,51 +589,6 @@ describe("LiquidityMiningMigration", () => {
 			let rewardDebtAfter = userInfoV2.rewards[0].rewardDebt;
 
 			expect(rewardDebtAfter).bignumber.equal(rewardDebtBefore.add(rewardDebt));
-		});
-	});
-
-	describe("migrateFunds", () => {
-		it("should only allow to migrate funds by the admin", async () => {
-			await expectRevert(liquidityMiningV2.migrateFunds({ from: account1 }), "unauthorized");
-		});
-		it("should fail if liquidity mining V2 contract was not added as admin", async () => {
-			await expectRevert(liquidityMiningV2.migrateFunds(), "unauthorized");
-		});
-		it("should only allow to migrate funds if the migrate grace period started", async () => {
-			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
-			await expectRevert(liquidityMiningV2.migrateFunds(), "Migration hasn't started yet");
-		});
-		it("should only allow to migrate funds if migration is not finished", async () => {
-			await liquidityMiningV2.finishMigration();
-			await expectRevert(liquidityMiningV2.migrateFunds(), "Migration has already ended");
-		});
-		it("should migrate funds from liquidityMiningV1", async () => {
-			let SOVBalanceV1Before = await SOVToken.balanceOf(liquidityMiningV1.address);
-			let SOVBalanceV2Before = await SOVToken.balanceOf(liquidityMiningV2.address);
-			let tokenBalancesV1Before = [];
-			let tokenBalancesV2Before = [];
-			for (let i = 0; i < tokens.length; i++) {
-				tokenBalancesV1Before.push(await tokens[i].balanceOf(liquidityMiningV1.address));
-				tokenBalancesV2Before.push(await tokens[i].balanceOf(liquidityMiningV2.address));
-				expect(tokenBalancesV2Before[i]).bignumber.equal(new BN(0));
-			}
-			expect(SOVBalanceV2Before).bignumber.equal(new BN(0));
-			await liquidityMiningV1.addAdmin(liquidityMiningV2.address);
-			await liquidityMiningV1.startMigrationGracePeriod();
-			await liquidityMiningV2.migrateFunds();
-
-			let SOVBalanceV1After = await SOVToken.balanceOf(liquidityMiningV1.address);
-			let SOVBalanceV2After = await SOVToken.balanceOf(liquidityMiningV2.address);
-			let tokenBalancesV1After = [];
-			let tokenBalancesV2After = [];
-			for (let i = 0; i < tokens.length; i++) {
-				tokenBalancesV1After.push(await tokens[i].balanceOf(liquidityMiningV1.address));
-				tokenBalancesV2After.push(await tokens[i].balanceOf(liquidityMiningV2.address));
-				expect(tokenBalancesV1After[i]).bignumber.equal(new BN(0));
-				expect(tokenBalancesV2After[i]).bignumber.equal(tokenBalancesV1Before[i]);
-			}
-			expect(SOVBalanceV1After).bignumber.equal(new BN(0));
-			expect(SOVBalanceV2After).bignumber.equal(SOVBalanceV1Before);
 		});
 	});
 

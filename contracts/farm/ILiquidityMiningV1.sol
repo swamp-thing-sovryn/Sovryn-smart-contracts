@@ -30,8 +30,6 @@ interface ILiquidityMiningV1 {
 			uint256[] memory
 		);
 
-	function resetUser(address _user, uint256 _poolId) external;
-
 	function migrateFunds() external;
 
 	function finishMigrationGracePeriod() external;
