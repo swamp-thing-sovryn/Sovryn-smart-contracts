@@ -7,25 +7,29 @@ const TOTAL_SUPPLY = etherMantissa(1000000000);
 
 const TestToken = artifacts.require("TestToken");
 const LiquidityMiningConfigToken = artifacts.require("LiquidityMiningConfigToken");
+const LiquidityMiningV1Logic = artifacts.require("LiquidityMiningV1Mockup");
 const LiquidityMiningLogic = artifacts.require("LiquidityMiningV1Mockup");
-const LiquidityMiningProxy = artifacts.require("LiquidityMiningProxyV1");
+const LiquidityMiningProxy = artifacts.require("LiquidityMiningProxy");
 const TestLockedSOV = artifacts.require("LockedSOVMockup");
 const Wrapper = artifacts.require("RBTCWrapperProxyMockup");
 
+const name = "Test SOV Token";
+const symbol = "TST";
+const PRECISION = 1e12;
+const rewardTokensPerBlock = new BN(3);
+const startDelayBlocks = new BN(1);
+const numberOfBonusBlocks = new BN(50);
+// The % which determines how much will be unlocked immediately.
+/// @dev 10000 is 100%
+const unlockedImmediatelyPercent = new BN(1000); //10%
+
+async function mineBlocks(blocks) {
+	for (let i = 0; i < blocks; i++) {
+		await mineBlock();
+	}
+}
+
 describe("LiquidityMining", () => {
-	const name = "Test SOV Token";
-	const symbol = "TST";
-
-	const PRECISION = 1e12;
-
-	const rewardTokensPerBlock = new BN(3);
-	const startDelayBlocks = new BN(1);
-	const numberOfBonusBlocks = new BN(50);
-
-	// The % which determines how much will be unlocked immediately.
-	/// @dev 10000 is 100%
-	const unlockedImmediatelyPercent = new BN(1000); //10%
-
 	let accounts;
 	let root, account1, account2, account3, account4;
 	let SOVToken, token1, token2, token3, liquidityMiningConfigToken;
@@ -1863,18 +1867,16 @@ describe("LiquidityMining", () => {
 	});
 
 	async function deployLiquidityMining() {
-		let liquidityMiningLogic = await LiquidityMiningLogic.new();
+		let liquidityMiningV1Logic = await LiquidityMiningV1Logic.new();
 		let liquidityMiningProxy = await LiquidityMiningProxy.new();
-		await liquidityMiningProxy.setImplementation(liquidityMiningLogic.address);
-		liquidityMining = await LiquidityMiningLogic.at(liquidityMiningProxy.address);
+		await liquidityMiningProxy.setImplementation(liquidityMiningV1Logic.address);
+		liquidityMining = await LiquidityMiningV1Logic.at(liquidityMiningProxy.address);
 
 		wrapper = await Wrapper.new(liquidityMining.address);
 	}
 
-	async function mineBlocks(blocks) {
-		for (let i = 0; i < blocks; i++) {
-			await mineBlock();
-		}
+	async function checkBonusPeriodHasNotEnded() {
+		expect(await liquidityMining.bonusEndBlock()).bignumber.gt((await web3.eth.getBlockNumber()).toString());
 	}
 
 	function checkPoolInfo(poolInfo, token, allocationPoint, lastRewardBlock, accumulatedRewardPerShare) {
@@ -1909,8 +1911,83 @@ describe("LiquidityMining", () => {
 		expect(userInfo.accumulatedReward).bignumber.equal(new BN(0));
 		return userReward;
 	}
+});
 
-	async function checkBonusPeriodHasNotEnded() {
-		expect(await liquidityMining.bonusEndBlock()).bignumber.gt((await web3.eth.getBlockNumber()).toString());
+describe("Contract upgrade", async () => {
+	let liquidityMiningProxy;
+
+	beforeEach(async () => {
+		SOVToken = await TestToken.new(name, symbol, 18, TOTAL_SUPPLY);
+		token1 = await TestToken.new("Test token 1", "TST-1", 18, TOTAL_SUPPLY);
+		token2 = await TestToken.new("Test token 2", "TST-2", 18, TOTAL_SUPPLY);
+		token3 = await TestToken.new("Test token 3", "TST-3", 18, TOTAL_SUPPLY);
+		liquidityMiningConfigToken = await LiquidityMiningConfigToken.new();
+		[root, account1, account2] = await web3.eth.getAccounts();
+		lockedSOVAdmins = [account1, account2];
+
+		lockedSOV = await TestLockedSOV.new(SOVToken.address, lockedSOVAdmins);
+
+		await deployLiquidityMining();
+		await liquidityMining.initialize(
+			SOVToken.address,
+			rewardTokensPerBlock,
+			startDelayBlocks,
+			numberOfBonusBlocks,
+			wrapper.address,
+			lockedSOV.address,
+			unlockedImmediatelyPercent
+		);
+	});
+
+	it("should be able to withdraw and SOV tokens to be transferred", async () => {
+		let allocationPoint = new BN(1);
+		let amount = new BN(1000);
+
+		await liquidityMining.add(token1.address, allocationPoint, false);
+		await mineBlocks(1);
+
+		await token1.mint(account1, amount);
+		await token1.approve(liquidityMining.address, amount, { from: account1 });
+
+		SOVToken.transfer(liquidityMining.address, amount);
+
+		await liquidityMining.deposit(token1.address, amount, ZERO_ADDRESS, { from: account1 });
+
+		await upgradeLiquidityMining();
+
+		let tx = await liquidityMining.emergencyWithdraw(token1.address, { from: account1 });
+
+		let totalUsersBalance = await liquidityMining.totalUsersBalance();
+		expect(totalUsersBalance).bignumber.equal(new BN(0));
+
+		let userInfo = await liquidityMining.getUserInfo(token1.address, account1);
+		expect(userInfo.rewardDebt).bignumber.equal(new BN(0));
+		expect(userInfo.accumulatedReward).bignumber.equal(new BN(0));
+
+		expectEvent(tx, "EmergencyWithdraw", {
+			user: account1,
+			poolToken: token1.address,
+			amount,
+		});
+
+		tx = await liquidityMining.transferSOV(root, amount, { from: root });
+		expectEvent(tx, "SOVTransferred", {
+			receiver: root,
+			amount: amount,
+		});
+	});
+
+	async function deployLiquidityMining() {
+		let liquidityMiningLogic = await LiquidityMiningLogic.new();
+		liquidityMiningProxy = await LiquidityMiningProxy.new();
+		await liquidityMiningProxy.setImplementation(liquidityMiningLogic.address);
+		liquidityMining = await LiquidityMiningLogic.at(liquidityMiningProxy.address);
+
+		wrapper = await Wrapper.new(liquidityMining.address);
+	}
+
+	async function upgradeLiquidityMining() {
+		let liquidityMiningV1Logic = await LiquidityMiningV1Logic.new();
+		await liquidityMiningProxy.setImplementation(liquidityMiningV1Logic.address);
 	}
 });
