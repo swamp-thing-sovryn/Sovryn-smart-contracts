@@ -1817,16 +1817,6 @@ describe("LiquidityMining", () => {
 				await expectRevert(liquidityMining.finishMigrationGracePeriod(), "Migration hasn't started yet");
 			});
 
-			it("should fail if grace period has already finished", async () => {
-				await liquidityMining.startMigrationGracePeriod();
-				await liquidityMining.finishMigrationGracePeriod();
-
-				const migrationGracePeriodState = await liquidityMining.migrationGracePeriodState();
-				expect(migrationGracePeriodState.toNumber()).to.equal(MigrationGracePeriodStates.Finished);
-
-				await expectRevert(liquidityMining.finishMigrationGracePeriod(), "Forbidden: contract deprecated");
-			});
-
 			it("should properly finish grace period", async () => {
 				await liquidityMining.startMigrationGracePeriod();
 				// check that the grace period is started
