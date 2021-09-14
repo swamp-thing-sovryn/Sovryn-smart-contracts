@@ -82,9 +82,9 @@ contract LiquidityMiningStorageV2 is AdminRole {
 	IERC20 public SOV;
 
 	//LiquidityMiningV1 contract address
-	ILiquidityMiningV1 liquidityMiningV1;
+	ILiquidityMiningV1 public liquidityMiningV1;
 
-	bool migrationFinished;
+	bool public migrationFinished;
 
 	/// @dev it is true if the user has been already migrated
 	mapping(address => bool) public userMigrated;
