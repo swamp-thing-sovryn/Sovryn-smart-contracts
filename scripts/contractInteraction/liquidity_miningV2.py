@@ -6,57 +6,57 @@ import copy
 from scripts.utils import * 
 import scripts.contractInteraction.config as conf
 
-def setLiquidityMiningAddressOnAllContracts():
+def setLiquidityMiningV2AddressOnAllContracts():
     print("setting LM address")
-    setLiquidityMiningAddress(conf.contracts['iDOC'])
-    setLiquidityMiningAddress(conf.contracts['iUSDT'])
-    setLiquidityMiningAddress(conf.contracts['iBPro'])
-    setLiquidityMiningAddress(conf.contracts['iXUSD'])
-    setLiquidityMiningAddress(conf.contracts['iRBTC'])
+    setLiquidityMiningV2Address(conf.contracts['iDOC'])
+    setLiquidityMiningV2Address(conf.contracts['iUSDT'])
+    setLiquidityMiningV2Address(conf.contracts['iBPro'])
+    setLiquidityMiningV2Address(conf.contracts['iXUSD'])
+    setLiquidityMiningV2Address(conf.contracts['iRBTC'])
 
-def getLiquidityMiningAddress(loanTokenAddress):
+def getLiquidityMiningV2Address(loanTokenAddress):
     loanToken = Contract.from_abi("loanToken", address=loanTokenAddress, abi=LoanTokenLogicLM.abi, owner=conf.acct)
     print(loanToken.liquidityMiningAddress())
     print(loanToken.target_())
 
-def setLiquidityMiningAddress(loanTokenAddress):
+def setLiquidityMiningV2Address(loanTokenAddress):
     loanToken = Contract.from_abi("loanToken", address=loanTokenAddress, abi=LoanTokenLogicLM.abi, owner=conf.acct)
     data = loanToken.setLiquidityMiningAddress.encode_input(conf.contracts['LiquidityMiningProxyV2'])
 
     sendWithMultisig(conf.contracts['multisig'], loanToken.address, data, conf.acct)
 
-def getLiquidityMiningAddressOnAllContracts():
+def getLiquidityMiningV2AddressOnAllContracts():
     print("setting LM address")
-    getLiquidityMiningAddress(conf.contracts['iDOC'])
-    getLiquidityMiningAddress(conf.contracts['iUSDT'])
-    getLiquidityMiningAddress(conf.contracts['iBPro'])
-    getLiquidityMiningAddress(conf.contracts['iRBTC'])
+    getLiquidityMiningV2Address(conf.contracts['iDOC'])
+    getLiquidityMiningV2Address(conf.contracts['iUSDT'])
+    getLiquidityMiningV2Address(conf.contracts['iBPro'])
+    getLiquidityMiningV2Address(conf.contracts['iRBTC'])
 
-def setWrapperOnLM():
+def setWrapperOnLMV2():
     lm = Contract.from_abi("LiquidityMiningV2", address = conf.contracts['LiquidityMiningProxyV2'], abi = LiquidityMiningV2.abi, owner = conf.acct)
 
     data = lm.setWrapper.encode_input(conf.contracts['RBTCWrapperProxy'])
     sendWithMultisig(conf.contracts['multisig'], lm.address, data, conf.acct)
 
 
-def getPoolId(poolToken):
+def getPoolIdOnLMV2(poolToken):
     lm = Contract.from_abi("LiquidityMiningV2", address = conf.contracts['LiquidityMiningProxyV2'], abi = LiquidityMiningV2.abi, owner = conf.acct)
     print(lm.getPoolId(poolToken))
 
 
-def getLMInfo():
+def getLMV2Info():
     lm = Contract.from_abi("LiquidityMiningV2", address = conf.contracts['LiquidityMiningProxyV2'], abi = LiquidityMiningV2.abi, owner = conf.acct)
     print(lm.getPoolLength())
     print(lm.getPoolInfoList())
     print(lm.wrapper())
 
-def setLockedSOV(newLockedSOV):
+def setLockedSOVOnLMV2(newLockedSOV):
     lockedSOVTransferLogic = Contract.from_abi("LockedSOVRewardTransferLogic", address=conf.contracts['LockedSOVRewardTransferLogic'],abi=LockedSOVRewardTransferLogic.abi, owner = conf.acct)
 
     data = lockedSOVTransferLogic.changeLockedSOV.encode_input(newLockedSOV)
     sendWithMultisig(conf.contracts['multisig'], lockedSOVTransferLogic.address, data, conf.acct)
 
-def addPoolsToLM():
+def addPoolsToLMV2():
     lm = Contract.from_abi("LiquidityMiningV2", address = conf.contracts['LiquidityMiningProxyV2'], abi = LiquidityMiningV2.abi, owner = conf.acct)
     # TODO prepare pool tokens list
 
@@ -79,7 +79,7 @@ def addPoolsToLM():
     print(data)
     sendWithMultisig(conf.contracts['multisig'], lm.address, data, conf.acct)
 
-def addMOCPoolTokenSOVReward():
+def addMOCPoolTokenSOVRewardOnLMV2():
     lm = Contract.from_abi("LiquidityMiningV2", address = conf.contracts['LiquidityMiningProxyV2'], abi = LiquidityMiningV2.abi, owner = conf.acct)
     MAX_ALLOCATION_POINT = 100000 * 1000 # 100 M
     ALLOCATION_POINT_BTC_SOV = 30000 # (WR)BTC/SOV
@@ -94,7 +94,7 @@ def addMOCPoolTokenSOVReward():
     data = lm.update.encode_input(conf.contracts['LiquidityMiningConfigToken'],[conf.contracts['SOV']], [ALLOCATION_POINT_CONFIG_TOKEN],True)
     sendWithMultisig(conf.contracts['multisig'], lm.address, data, conf.acct)
 
-def transferSOVtoLM(amount):
+def transferSOVtoLMV2(amount):
     lm = conf.contracts['LiquidityMiningProxyV2']
     SOVtoken = Contract.from_abi("SOV", address=conf.contracts['SOV'], abi=SOV.abi, owner=conf.acct)
     data = SOVtoken.transfer.encode_input(lm, amount)

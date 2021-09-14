@@ -21,6 +21,8 @@ from scripts.contractInteraction.token import *
 from scripts.contractInteraction.ownership import *
 from scripts.contractInteraction.misc import *
 from scripts.contractInteraction.prices import *
+from scripts.contractInteraction.liquidity_miningV1 import *
+from scripts.contractInteraction.liquidity_miningV2 import *
 
 def main():
     
