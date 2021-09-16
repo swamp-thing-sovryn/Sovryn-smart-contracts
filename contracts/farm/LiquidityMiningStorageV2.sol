@@ -6,7 +6,6 @@ import "../openzeppelin/SafeMath.sol";
 import "../locked/ILockedSOV.sol";
 import "../utils/AdminRole.sol";
 import "./IRewardTransferLogic.sol";
-import "./ILiquidityMiningV1.sol";
 
 contract LiquidityMiningStorageV2 is AdminRole {
 	// Info of each user.
@@ -78,14 +77,8 @@ contract LiquidityMiningStorageV2 is AdminRole {
 	// Info of each user that stakes LP tokens.
 	mapping(uint256 => mapping(address => UserInfo)) public userInfoMap;
 
-	//The SOV token
-	IERC20 public SOV;
-
-	//LiquidityMiningV1 contract address
-	ILiquidityMiningV1 public liquidityMiningV1;
+	//LiquidityMiningV1 to LiquidityMiningV2 migrator contract address
+	address public migrator;
 
 	bool public migrationFinished;
-
-	/// @dev it is true if the user has been already migrated
-	mapping(address => bool) public userMigrated;
 }

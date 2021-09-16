@@ -19,6 +19,7 @@ const Wrapper = artifacts.require("RBTCWrapperProxyMockupV2");
 const LockedSOVRewardTransferLogic = artifacts.require("LockedSOVRewardTransferLogic");
 const ERC20TransferLogic = artifacts.require("ERC20TransferLogic");
 const TestPoolToken = artifacts.require("TestPoolToken");
+const Migrator = artifacts.require("LMV1toLMV2Migrator");
 
 describe("LiquidityMiningMigration", () => {
 	const name = "Test SOV Token";
@@ -37,10 +38,17 @@ describe("LiquidityMiningMigration", () => {
 	let accounts;
 	let root, account1, account2, account3, account4, account5, account6, account7, account8, account9;
 	let SOVToken, token1, token2, token3, token4, token5, token6, token7, token8, liquidityMiningConfigToken;
-	let liquidityMiningProxy, liquidityMining, liquidityMiningV2, wrapper;
+	let liquidityMiningProxy, liquidityMining, liquidityMiningV2, migrator, wrapper;
 	let rewardTransferLogic, lockedSOVAdmins, lockedSOV;
 	let erc20RewardTransferLogic;
 	let allocationPoint = new BN(10);
+
+	const MigrationStates = {
+		None: 0,
+		FinishedPoolsMigration: 1,
+		FinishedUsersMigration: 2,
+		FinishedFundsMigration: 3,
+	};
 
 	before(async () => {
 		accounts = await web3.eth.getAccounts();
@@ -88,7 +96,11 @@ describe("LiquidityMiningMigration", () => {
 		await upgradeLiquidityMining();
 
 		await deployLiquidityMiningV2();
-		await liquidityMiningV2.initialize(wrapper.address, liquidityMining.address, SOVToken.address);
+
+		migrator = await Migrator.new();
+		await migrator.initialize(SOVToken.address, liquidityMining.address, liquidityMiningV2.address);
+
+		await liquidityMiningV2.initialize(wrapper.address, migrator.address, SOVToken.address);
 
 		erc20RewardTransferLogic = await ERC20TransferLogic.new();
 
@@ -131,33 +143,58 @@ describe("LiquidityMiningMigration", () => {
 			await upgradeLiquidityMining();
 			await expectRevert(liquidityMining.setLiquidityMiningV2(ZERO_ADDRESS), "Invalid address");
 		});
+		it("should fail if SOV addres is invalid in migrator contract", async () => {
+			migrator = await Migrator.new();
+			await expectRevert(
+				migrator.initialize(ZERO_ADDRESS, liquidityMining.address, liquidityMiningV2.address),
+				"invalid token address"
+			);
+		});
+		it("should fail if liquidity mining V1 addres is invalid in migrator contract", async () => {
+			migrator = await Migrator.new();
+			await expectRevert(migrator.initialize(SOVToken.address, ZERO_ADDRESS, liquidityMiningV2.address), "invalid contract address");
+		});
+		it("should fail if liquidity mining V2 addres is invalid in migrator contract", async () => {
+			migrator = await Migrator.new();
+			await expectRevert(migrator.initialize(SOVToken.address, liquidityMining.address, ZERO_ADDRESS), "invalid contract address");
+		});
 	});
 
 	describe("migratePools", () => {
 		it("should only allow to migrate pools by the admin", async () => {
-			await expectRevert(liquidityMiningV2.migratePools({ from: account1 }), "unauthorized");
+			await expectRevert(migrator.migratePools({ from: account1 }), "unauthorized");
 		});
-		it("should fail if liquidity mining V2 contract was not added as admin", async () => {
-			await expectRevert(liquidityMiningV2.migratePools(), "unauthorized");
+		it("should fail if migrator contract was not added as admin in liquidity mining V1", async () => {
+			await expectRevert(migrator.migratePools(), "unauthorized");
 		});
-		it("should only allow to migrate pools if migration is not finished", async () => {
-			await liquidityMiningV2.finishMigration();
-			await expectRevert(liquidityMiningV2.migratePools(), "Migration has already ended");
+		it("should fail if migrator contract was not added as admin in liquidity mining V2", async () => {
+			await liquidityMining.addAdmin(migrator.address);
+			await liquidityMining.startMigrationGracePeriod();
+			await expectRevert(migrator.migratePools(), "unauthorized");
+		});
+		it("should only allow to migrate pools by migrator contract", async () => {
+			await liquidityMiningV2.initialize(wrapper.address, SOVToken.address, SOVToken.address);
+			await liquidityMining.addAdmin(migrator.address);
+			await liquidityMining.startMigrationGracePeriod();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await expectRevert(migrator.migratePools(), "only allowed to migrator contract");
 		});
 		it("should only allow to migrate pools if the migrate grace period started", async () => {
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
-			await expectRevert(liquidityMiningV2.migratePools(), "Migration hasn't started yet");
+			await liquidityMining.addAdmin(migrator.address);
+			await expectRevert(migrator.migratePools(), "Migration hasn't started yet");
 		});
 		it("should only allow to migrate pools once", async () => {
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await liquidityMiningV2.migratePools();
-			await expectRevert(liquidityMiningV2.migratePools(), "Token already added");
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await expectRevert(migrator.migratePools(), "pools have already been migrated");
 		});
 		it("should add pools from liquidityMininigV1", async () => {
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await liquidityMiningV2.migratePools();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
 			for (let i = 0; i < tokens.length; i++) {
 				let poolToken = await liquidityMiningV2.poolInfoList(i);
 				expect(poolToken).equal(tokens[i].address);
@@ -184,30 +221,68 @@ describe("LiquidityMiningMigration", () => {
 
 				expect(startBlockV2).bignumber.equal(startBlockV1);
 				expect(totalUsersBalanceV2).bignumber.equal(totalUsersBalanceV1);
+				const migrationState = await migrator.migrationState();
+				expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedPoolsMigration);
 			}
 		});
 	});
 
 	describe("migrateUsers", () => {
 		it("should only allow to migrate users by the admin", async () => {
-			await expectRevert(liquidityMiningV2.migrateUsers(accounts, { from: account1 }), "unauthorized");
+			await expectRevert(migrator.migrateUsers(accounts, { from: account1 }), "unauthorized");
 		});
-		it("should fail if liquidity mining V2 contract was not added as admin", async () => {
-			await expectRevert(liquidityMiningV2.migrateUsers(accounts), "unauthorized");
+		it("should fail migrating users if pools were not migrated", async () => {
+			await expectRevert(migrator.migrateUsers(accounts), "have to migrate pools first");
 		});
-		it("should only allow to migrate users if the migrate grace period started", async () => {
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
-			await expectRevert(liquidityMiningV2.migrateUsers(accounts), "Migration hasn't started yet");
+		it("should fail finishing users migration if pools were not migrated", async () => {
+			await expectRevert(migrator.finishUsersMigration(), "have to migrate pools first");
 		});
-		it("should only allow to migrate users if migration is not finished", async () => {
-			await liquidityMiningV2.finishMigration();
-			await expectRevert(liquidityMiningV2.migrateUsers(accounts), "Migration has already ended");
-		});
-		it("should only allow to migrate users once", async () => {
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+		it("should only allow to migrate users by migrator contract", async () => {
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await liquidityMiningV2.migrateUsers(accounts);
-			await expectRevert(liquidityMiningV2.migrateUsers(accounts), "User already migrated");
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await liquidityMiningV2.initialize(wrapper.address, SOVToken.address, SOVToken.address);
+			await expectRevert(migrator.migrateUsers(accounts), "only allowed to migrator contract");
+		});
+		it("should only allow to finish users migration by the admin", async () => {
+			await liquidityMining.addAdmin(migrator.address);
+			await liquidityMining.startMigrationGracePeriod();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await expectRevert(migrator.finishUsersMigration({ from: account1 }), "unauthorized");
+		});
+		it("should only allow to migrate users before finish user migration", async () => {
+			await liquidityMining.addAdmin(migrator.address);
+			await liquidityMining.startMigrationGracePeriod();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.finishUsersMigration();
+			await expectRevert(migrator.migrateUsers(accounts), "users have already been migrated");
+		});
+		it("should save migrated users", async () => {
+			await liquidityMining.addAdmin(migrator.address);
+			await liquidityMining.startMigrationGracePeriod();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.migrateUsers(accounts);
+			accounts.forEach(async (account) => {
+				expect(await migrator.userMigrated(account));
+			});
+
+			await migrator.finishUsersMigration();
+			const migrationState = await migrator.migrationState();
+			expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedUsersMigration);
+		});
+		it("should emit user migrated event", async () => {
+			await liquidityMining.addAdmin(migrator.address);
+			await liquidityMining.startMigrationGracePeriod();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			tx = await migrator.migrateUsers([accounts[0]]);
+			expectEvent(tx, "UserMigrated", {
+				user: accounts[0],
+			});
 		});
 		it("should be able to migrate users in differents tx", async () => {
 			let userInfoV1 = [];
@@ -219,12 +294,21 @@ describe("LiquidityMiningMigration", () => {
 				}
 			}
 
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await liquidityMiningV2.migratePools();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
 			let halfLength = accounts.length / 2;
-			await liquidityMiningV2.migrateUsers(accounts.slice(0, halfLength));
-			await liquidityMiningV2.migrateUsers(accounts.slice(-halfLength));
+			await migrator.migrateUsers(accounts.slice(0, halfLength));
+
+			let migrationState = await migrator.migrationState();
+			expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedPoolsMigration);
+
+			await migrator.migrateUsers(accounts.slice(-halfLength));
+
+			await migrator.finishUsersMigration();
+			migrationState = await migrator.migrationState();
+			expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedUsersMigration);
 
 			for (let i = 0; i < tokens.length; i++) {
 				for (let j = 0; j < accountDeposits.length; j++) {
@@ -236,7 +320,6 @@ describe("LiquidityMiningMigration", () => {
 				}
 			}
 		});
-
 		it("should migrate all accounts with deposits from liquidityMininigV1", async () => {
 			let userInfoV1 = [];
 			for (let i = 0; i < tokens.length; i++) {
@@ -247,10 +330,15 @@ describe("LiquidityMiningMigration", () => {
 				}
 			}
 
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await liquidityMiningV2.migratePools();
-			await liquidityMiningV2.migrateUsers(accounts);
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.migrateUsers(accounts);
+
+			await migrator.finishUsersMigration();
+			const migrationState = await migrator.migrationState();
+			expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedUsersMigration);
 
 			for (let i = 0; i < tokens.length; i++) {
 				for (let j = 0; j < accountDeposits.length; j++) {
@@ -262,35 +350,50 @@ describe("LiquidityMiningMigration", () => {
 				}
 			}
 		});
-		it("should migrate 75 random accounts from liquidityMininigV1", async () => {
-			let randomAccounts = createRandomAccounts(75);
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+		it("should migrate 65 random accounts from liquidityMininigV1", async () => {
+			let randomAccounts = createRandomAccounts(65);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await liquidityMiningV2.migratePools();
-			await liquidityMiningV2.migrateUsers(randomAccounts);
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.migrateUsers(randomAccounts);
 		});
 	});
 
 	describe("migrateFunds", () => {
 		it("should only allow to migrate funds by the admin", async () => {
-			await expectRevert(liquidityMiningV2.migrateFunds({ from: account1 }), "unauthorized");
+			await expectRevert(migrator.migrateFunds({ from: account1 }), "unauthorized");
 		});
-		it("should fail if liquidity mining V2 contract was not added as admin", async () => {
-			await expectRevert(liquidityMiningV2.migrateFunds(), "unauthorized");
+		it("should fail migrating funds if users were not migrated", async () => {
+			await expectRevert(migrator.migrateFunds(), "have to migrate users first");
 		});
-		it("should only allow to migrate funds if the migrate grace period started", async () => {
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
-			await expectRevert(liquidityMiningV2.migrateFunds(), "Migration hasn't started yet");
-		});
-		it("should only allow to migrate funds if migration is not finished", async () => {
-			await liquidityMiningV2.finishMigration();
-			await expectRevert(liquidityMiningV2.migrateFunds(), "Migration has already ended");
-		});
-		it("should fail if migrate funds without balance in liquidity mining V1", async () => {
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+		it("should only allow to migrate funds by migrator contract", async () => {
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await liquidityMiningV2.migrateFunds();
-			await expectRevert(liquidityMiningV2.migrateFunds(), "Amount invalid");
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.finishUsersMigration();
+			await liquidityMiningV2.initialize(wrapper.address, SOVToken.address, SOVToken.address);
+			await expectRevert(migrator.migrateFunds(), "only allowed to migrator contract");
+		});
+		it("should fail trying to migrate funds without SOV tokens in liquidityMiningV1", async () => {
+			const balanceSOV = await SOVToken.balanceOf(liquidityMining.address);
+			await liquidityMining.transferSOV(liquidityMiningV2.address, balanceSOV);
+			await liquidityMining.addAdmin(migrator.address);
+			await liquidityMining.startMigrationGracePeriod();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.finishUsersMigration();
+			await expectRevert(migrator.migrateFunds(), "Amount invalid");
+		});
+		it("should fail trying to migrate funds twice", async () => {
+			await liquidityMining.addAdmin(migrator.address);
+			await liquidityMining.startMigrationGracePeriod();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.finishUsersMigration();
+			await migrator.migrateFunds();
+			await expectRevert(migrator.migrateFunds(), "funds have already been migrated");
 		});
 		it("should fail if liquidity mining V2 is not initialized in liquidity mining V1", async () => {
 			await deployLiquidityMining();
@@ -305,11 +408,18 @@ describe("LiquidityMiningMigration", () => {
 			);
 			await upgradeLiquidityMining();
 			await deployLiquidityMiningV2();
-			await liquidityMiningV2.initialize(wrapper.address, liquidityMining.address, SOVToken.address);
 
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			migrator = await Migrator.new();
+			await migrator.initialize(SOVToken.address, liquidityMining.address, liquidityMiningV2.address);
+
+			await liquidityMiningV2.initialize(wrapper.address, migrator.address, SOVToken.address);
+
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await expectRevert(liquidityMiningV2.migrateFunds(), "Address not initialized");
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.finishUsersMigration();
+			await expectRevert(migrator.migrateFunds(), "Address not initialized");
 		});
 		it("should migrate funds from liquidityMining", async () => {
 			let SOVBalanceV1Before = await SOVToken.balanceOf(liquidityMining.address);
@@ -322,9 +432,15 @@ describe("LiquidityMiningMigration", () => {
 				expect(tokenBalancesV2Before[i]).bignumber.equal(new BN(0));
 			}
 			expect(SOVBalanceV2Before).bignumber.equal(new BN(0));
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await liquidityMiningV2.migrateFunds();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.finishUsersMigration();
+			await migrator.migrateFunds();
+
+			const migrationState = await migrator.migrationState();
+			expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedFundsMigration);
 
 			let SOVBalanceV1After = await SOVToken.balanceOf(liquidityMining.address);
 			let SOVBalanceV2After = await SOVToken.balanceOf(liquidityMiningV2.address);
@@ -347,11 +463,13 @@ describe("LiquidityMiningMigration", () => {
 				from: accountDeposits[0].account,
 			});
 
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await liquidityMiningV2.migratePools();
-			await liquidityMiningV2.migrateUsers(accounts);
-			await liquidityMiningV2.migrateFunds();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.migrateUsers(accounts);
+			await migrator.finishUsersMigration();
+			await migrator.migrateFunds();
 
 			await expectRevert(
 				liquidityMiningV2.withdraw(accountDeposits[0].deposit[0].token, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
@@ -361,7 +479,7 @@ describe("LiquidityMiningMigration", () => {
 			);
 		});
 		it("should withdraw half before migration and withdraw the other half after", async () => {
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
 			tokenBalanceBefore = await token1.balanceOf(accountDeposits[0].account);
 			await liquidityMining.withdraw(
@@ -371,9 +489,11 @@ describe("LiquidityMiningMigration", () => {
 				{ from: accountDeposits[0].account }
 			);
 
-			await liquidityMiningV2.migratePools();
-			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
-			await liquidityMiningV2.migrateFunds();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.migrateUsers([accountDeposits[0].account]);
+			await migrator.finishUsersMigration();
+			await migrator.migrateFunds();
 			await liquidityMiningV2.withdraw(
 				accountDeposits[0].deposit[0].token,
 				accountDeposits[0].deposit[0].amount.div(new BN(2)),
@@ -399,7 +519,11 @@ describe("LiquidityMiningMigration", () => {
 			);
 			await upgradeLiquidityMining();
 			await deployLiquidityMiningV2();
-			await liquidityMiningV2.initialize(wrapper.address, liquidityMining.address, SOVToken.address);
+
+			migrator = await Migrator.new();
+			await migrator.initialize(SOVToken.address, liquidityMining.address, liquidityMiningV2.address);
+
+			await liquidityMiningV2.initialize(wrapper.address, migrator.address, SOVToken.address);
 			await liquidityMining.setLiquidityMiningV2(liquidityMiningV2.address);
 
 			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
@@ -422,12 +546,13 @@ describe("LiquidityMiningMigration", () => {
 			});
 			let balanceLockedBefore = await lockedSOV.getLockedBalance(accountDeposits[0].account);
 
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await liquidityMiningV2.migratePools();
-			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
-			await liquidityMiningV2.migrateFunds();
-			await liquidityMiningV2.finishMigration();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.migrateUsers([accountDeposits[0].account]);
+			await migrator.finishUsersMigration();
+			await migrator.migrateFunds();
 
 			await token1.approve(liquidityMiningV2.address, accountDeposits[0].deposit[0].amount, { from: accountDeposits[0].account });
 			await liquidityMiningV2.deposit(token1.address, accountDeposits[0].deposit[0].amount, ZERO_ADDRESS, {
@@ -456,7 +581,11 @@ describe("LiquidityMiningMigration", () => {
 			);
 			await upgradeLiquidityMining();
 			await deployLiquidityMiningV2();
-			await liquidityMiningV2.initialize(wrapper.address, liquidityMining.address, SOVToken.address);
+
+			migrator = await Migrator.new();
+			await migrator.initialize(SOVToken.address, liquidityMining.address, liquidityMiningV2.address);
+
+			await liquidityMiningV2.initialize(wrapper.address, migrator.address, SOVToken.address);
 			await liquidityMining.setLiquidityMiningV2(liquidityMiningV2.address);
 
 			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
@@ -480,14 +609,16 @@ describe("LiquidityMiningMigration", () => {
 			let blockStart = tx.receipt.blockNumber;
 			let balanceLockedBefore = await lockedSOV.getLockedBalance(accountDeposits[0].account);
 
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
 
 			await mineBlocks(10);
 
-			await liquidityMiningV2.migratePools();
-			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
-			await liquidityMiningV2.migrateFunds();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.migrateUsers([accountDeposits[0].account]);
+			await migrator.finishUsersMigration();
+			await migrator.migrateFunds();
 
 			tx = await liquidityMiningV2.withdraw(token1.address, accountDeposits[0].deposit[0].amount.div(new BN(2)), ZERO_ADDRESS, {
 				from: accountDeposits[0].account,
@@ -513,7 +644,11 @@ describe("LiquidityMiningMigration", () => {
 			);
 			await upgradeLiquidityMining();
 			await deployLiquidityMiningV2();
-			await liquidityMiningV2.initialize(wrapper.address, liquidityMining.address, SOVToken.address);
+
+			migrator = await Migrator.new();
+			await migrator.initialize(SOVToken.address, liquidityMining.address, liquidityMiningV2.address);
+
+			await liquidityMiningV2.initialize(wrapper.address, migrator.address, SOVToken.address);
 			await liquidityMining.setLiquidityMiningV2(liquidityMiningV2.address);
 
 			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
@@ -534,11 +669,13 @@ describe("LiquidityMiningMigration", () => {
 			await liquidityMining.claimReward(token1.address, ZERO_ADDRESS, { from: accountDeposits[0].account });
 			let { rewardDebt: rewardDebtBefore } = await liquidityMining.userInfoMap(0, accountDeposits[0].account);
 
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
-			await liquidityMiningV2.migratePools();
-			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
-			await liquidityMiningV2.migrateFunds();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.migrateUsers([accountDeposits[0].account]);
+			await migrator.finishUsersMigration();
+			await migrator.migrateFunds();
 
 			let userInfoV2 = await liquidityMiningV2.getUserInfo(token1.address, accountDeposits[0].account);
 			let rewardDebtAfter = userInfoV2.rewards[0].rewardDebt;
@@ -559,7 +696,11 @@ describe("LiquidityMiningMigration", () => {
 			);
 			await upgradeLiquidityMining();
 			await deployLiquidityMiningV2();
-			await liquidityMiningV2.initialize(wrapper.address, liquidityMining.address, SOVToken.address);
+
+			migrator = await Migrator.new();
+			await migrator.initialize(SOVToken.address, liquidityMining.address, liquidityMiningV2.address);
+
+			await liquidityMiningV2.initialize(wrapper.address, migrator.address, SOVToken.address);
 			await liquidityMining.setLiquidityMiningV2(liquidityMiningV2.address);
 
 			rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
@@ -581,14 +722,16 @@ describe("LiquidityMiningMigration", () => {
 			let blockStart = tx.receipt.blockNumber;
 			let { rewardDebt: rewardDebtBefore } = await liquidityMining.userInfoMap(0, accountDeposits[0].account);
 
-			await liquidityMining.addAdmin(liquidityMiningV2.address);
+			await liquidityMining.addAdmin(migrator.address);
 			await liquidityMining.startMigrationGracePeriod();
 
 			await mineBlocks(10);
 
-			await liquidityMiningV2.migratePools();
-			await liquidityMiningV2.migrateUsers([accountDeposits[0].account]);
-			await liquidityMiningV2.migrateFunds();
+			await liquidityMiningV2.addAdmin(migrator.address);
+			await migrator.migratePools();
+			await migrator.migrateUsers([accountDeposits[0].account]);
+			await migrator.finishUsersMigration();
+			await migrator.migrateFunds();
 
 			tx = await liquidityMiningV2.claimRewards(token1.address, ZERO_ADDRESS, { from: accountDeposits[0].account });
 			let blockEnd = tx.receipt.blockNumber;

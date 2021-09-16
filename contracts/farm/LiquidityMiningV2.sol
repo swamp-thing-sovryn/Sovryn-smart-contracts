@@ -6,12 +6,12 @@ import "../openzeppelin/SafeERC20.sol";
 import "../openzeppelin/SafeMath.sol";
 import "./LiquidityMiningStorageV2.sol";
 import "./IRewardTransferLogic.sol";
-import "./ILiquidityMining.sol";
+import "./ILiquidityMiningV2.sol";
 
 /// @notice This contract is a new liquidity mining version that let's the user
 ///         to earn multiple reward tokens by staking LP tokens as opposed to the
 /// 				previous one that only rewarded SOV
-contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
+contract LiquidityMiningV2 is ILiquidityMiningV2, LiquidityMiningStorageV2 {
 	using SafeMath for uint256;
 	using SafeERC20 for IERC20;
 
@@ -51,15 +51,14 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	 */
 	function initialize(
 		address _wrapper,
-		ILiquidityMiningV1 _liquidityMiningV1,
+		address _migrator,
 		IERC20 _SOV
 	) external onlyAuthorized {
 		/// @dev Non-idempotent function. Must be called just once.
-		require(address(_liquidityMiningV1) != address(0), "Invalid contract address");
-		require(address(_SOV) != address(0), "Invalid token address");
+		require(_migrator != address(0), "invalid contract address");
+		require(address(_SOV) != address(0), "invalid token address");
 		wrapper = _wrapper;
-		liquidityMiningV1 = _liquidityMiningV1;
-		SOV = _SOV;
+		migrator = _migrator;
 	}
 
 	/**
@@ -167,10 +166,10 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	 */
 	function add(
 		address _poolToken,
-		address[] memory _rewardTokens,
-		uint96[] memory _allocationPoints,
+		address[] calldata _rewardTokens,
+		uint96[] calldata _allocationPoints,
 		bool _withUpdate
-	) public onlyAuthorized {
+	) external onlyAuthorized {
 		require(_rewardTokens.length > 0, "Invalid reward tokens length");
 		require(_rewardTokens.length == _allocationPoints.length, "Invalid allocation points length");
 		require(_poolToken != address(0), "Invalid token address");
@@ -791,7 +790,7 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	 * @param _poolToken the address of pool token
 	 * @param _rewardToken the address of reward token
 	 */
-	function getPoolReward(address _poolToken, address _rewardToken) external view returns (PoolInfoRewardToken memory) {
+	function getPoolReward(address _poolToken, address _rewardToken) public view returns (PoolInfoRewardToken memory) {
 		uint256 poolId = _getPoolId(_poolToken);
 		return poolInfoRewardTokensMap[poolId][_rewardToken];
 	}
@@ -935,85 +934,49 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 		return userInfoMap[poolId][_user].amount;
 	}
 
-	/**
-	 * @notice read all pools from liquidity mining V1 contract and add them
-	 */
-	function migratePools() external onlyAuthorized {
-		(
-			address[] memory _poolToken,
-			uint96[] memory _allocationPoints,
-			uint256[] memory _lastRewardBlock,
-			uint256[] memory _accumulatedRewardPerShare
-		) = liquidityMiningV1.getPoolInfoListArray();
-
-		require(!migrationFinished, "Migration has already ended");
-		require(_poolToken.length == _allocationPoints.length, "Arrays mismatch");
-		require(_poolToken.length == _lastRewardBlock.length, "Arrays mismatch");
-
-		liquidityMiningV1.finishMigrationGracePeriod();
-		for (uint256 i = 0; i < _poolToken.length; i++) {
-			address poolToken = _poolToken[i];
-			uint96[] memory allocationPoints = new uint96[](1);
-			allocationPoints[0] = _allocationPoints[i];
-			uint256 lastRewardBlock = _lastRewardBlock[i];
-			uint256 accumulatedRewardPerShare = _accumulatedRewardPerShare[i];
-			address[] memory SOVAddress = new address[](1);
-			SOVAddress[0] = address(SOV);
-			//add will revert if poolToken is invalid or if it was already added
-			add(poolToken, SOVAddress, allocationPoints, false);
-
-			uint256 poolId = _getPoolId(poolToken);
-			PoolInfoRewardToken storage poolInfoRewardToken = poolInfoRewardTokensMap[poolId][address(SOV)];
-			//add pool function put lastRewardBlock with current block number value, so we need to retrieve the original
-			poolInfoRewardToken.lastRewardBlock = lastRewardBlock;
-			poolInfoRewardToken.accumulatedRewardPerShare = accumulatedRewardPerShare;
-		}
-		RewardToken storage rewardToken = rewardTokensMap[address(SOV)];
-		rewardToken.startBlock = liquidityMiningV1.getStartBlock();
-		rewardToken.totalUsersBalance = liquidityMiningV1.getTotalUsersBalance();
+	function setPoolInfoRewardToken(
+		address _poolToken,
+		address _rewardToken,
+		uint256 _lastRewardBlock,
+		uint256 _accumulatedRewardPerShare
+	) external onlyAuthorized {
+		require(msg.sender == migrator, "only allowed to migrator contract");
+		uint256 poolId = _getPoolId(_poolToken);
+		PoolInfoRewardToken storage poolInfoRewardToken = poolInfoRewardTokensMap[poolId][_rewardToken];
+		poolInfoRewardToken.lastRewardBlock = _lastRewardBlock;
+		poolInfoRewardToken.accumulatedRewardPerShare = _accumulatedRewardPerShare;
 	}
 
-	/**
-	 * @notice read all users of all the pools from liquidity mining V1 contract and copy their info
-	 * @param _users a list of users to be copied
-	 */
-	function migrateUsers(address[] calldata _users) external onlyAuthorized {
-		require(!migrationFinished, "Migration has already ended");
-		liquidityMiningV1.finishMigrationGracePeriod();
-		for (uint256 i = 0; i < _users.length; i++) {
-			(uint256[] memory _amount, uint256[] memory _rewardDebt, uint256[] memory _accumulatedReward) =
-				liquidityMiningV1.getUserInfoListArray(_users[i]);
-
-			require(_amount.length == _rewardDebt.length, "Arrays mismatch");
-			require(_amount.length == _accumulatedReward.length, "Arrays mismatch");
-
-			address user = _users[i];
-
-			require(userMigrated[user] == false, "User already migrated");
-			userMigrated[user] = true;
-
-			for (uint256 j = 0; j < _amount.length; j++) {
-				uint256 poolId = j;
-				UserInfo storage userInfo = userInfoMap[poolId][user];
-				userInfo.amount = _amount[j];
-				userInfo.rewards[address(SOV)] = UserReward(_rewardDebt[j], _accumulatedReward[j]);
-			}
-		}
+	function setRewardToken(
+		address _rewardToken,
+		uint256 _startBlock,
+		uint256 _totalUsersBalance
+	) external onlyAuthorized {
+		require(msg.sender == migrator, "only allowed to migrator contract");
+		RewardToken storage rewardToken = rewardTokensMap[_rewardToken];
+		rewardToken.startBlock = _startBlock;
+		rewardToken.totalUsersBalance = _totalUsersBalance;
 	}
 
-	/**
-	 * @notice transfer all funds from liquidity mining V1
-	 */
-	function migrateFunds() external onlyAuthorized {
-		require(!migrationFinished, "Migration has already ended");
-		liquidityMiningV1.finishMigrationGracePeriod();
-		liquidityMiningV1.migrateFunds();
+	function setUserInfo(
+		uint256 _poolId,
+		address _user,
+		address _rewardToken,
+		uint256 _amount,
+		uint256 _rewardDebt,
+		uint256 _accumulatedReward
+	) external onlyAuthorized {
+		require(msg.sender == migrator, "only allowed to migrator contract");
+		UserInfo storage userInfo = userInfoMap[_poolId][_user];
+		userInfo.amount = _amount;
+		userInfo.rewards[_rewardToken] = UserReward(_rewardDebt, _accumulatedReward);
 	}
 
 	/**
 	 * @notice finish migration
 	 */
 	function finishMigration() external onlyAuthorized {
+		require(msg.sender == migrator, "only allowed to migrator contract");
 		migrationFinished = true;
 	}
 }
