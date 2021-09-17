@@ -11,12 +11,7 @@ import "./ILiquidityMiningV2.sol";
 contract LMV1toLMV2Migrator is AdminRole {
 	using SafeMath for uint256;
 	using SafeERC20 for IERC20;
-	enum MigrationStates {
-		None,
-		FinishedPoolsMigration, //pools has been migrated to LiquidityMiningV2 (set by migratior contract)
-		FinishedUsersMigration, //users has been migrated to LiquidityMiningV2 (set by admin)
-		FinishedFundsMigration //funds has been migrated to LiquidityMiningV2 (set by migrator contract)
-	}
+	enum MigrationStates { MigratingPools, MigratingUsers, MigratingFunds, MigrationFinished }
 
 	//represents de migration state from LiquidityMiningV1 to LiquidityMiningV2
 	MigrationStates public migrationState;
@@ -37,19 +32,17 @@ contract LMV1toLMV2Migrator is AdminRole {
 
 	/* Modifiers */
 	modifier onlyPoolsMigrationState() {
-		require(migrationState == MigrationStates.None, "pools have already been migrated");
+		require(migrationState == MigrationStates.MigratingPools, "Wrong state: should be MigratingPools");
 		_;
 	}
 
 	modifier onlyUsersMigrationState() {
-		require(migrationState >= MigrationStates.FinishedPoolsMigration, "have to migrate pools first");
-		require(migrationState < MigrationStates.FinishedUsersMigration, "users have already been migrated");
+		require(migrationState == MigrationStates.MigratingUsers, "Wrong state: should be MigratingUsers");
 		_;
 	}
 
 	modifier onlyFundsMigrationState() {
-		require(migrationState >= MigrationStates.FinishedUsersMigration, "have to migrate users first");
-		require(migrationState < MigrationStates.FinishedFundsMigration, "funds have already been migrated");
+		require(migrationState == MigrationStates.MigratingFunds, "Wrong state: should be MigratingFunds");
 		_;
 	}
 
@@ -71,18 +64,19 @@ contract LMV1toLMV2Migrator is AdminRole {
 		liquidityMiningV1 = _liquidityMiningV1;
 		liquidityMiningV2 = _liquidityMiningV2;
 		SOV = _SOV;
+		migrationState = MigrationStates.MigratingPools;
 	}
 
 	function _finishPoolsMigration() internal onlyPoolsMigrationState {
-		migrationState = MigrationStates.FinishedPoolsMigration;
+		migrationState = MigrationStates.MigratingUsers;
 	}
 
 	function finishUsersMigration() external onlyAuthorized onlyUsersMigrationState {
-		migrationState = MigrationStates.FinishedUsersMigration;
+		migrationState = MigrationStates.MigratingFunds;
 	}
 
 	function _finishFundsMigration() internal onlyFundsMigrationState {
-		migrationState = MigrationStates.FinishedFundsMigration;
+		migrationState = MigrationStates.MigrationFinished;
 	}
 
 	/**

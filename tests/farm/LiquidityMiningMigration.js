@@ -44,10 +44,10 @@ describe("LiquidityMiningMigration", () => {
 	let allocationPoint = new BN(10);
 
 	const MigrationStates = {
-		None: 0,
-		FinishedPoolsMigration: 1,
-		FinishedUsersMigration: 2,
-		FinishedFundsMigration: 3,
+		MigratingPools: 0,
+		MigratingUsers: 1,
+		MigratingFunds: 2,
+		MigrationFinished: 3,
 	};
 
 	before(async () => {
@@ -189,7 +189,7 @@ describe("LiquidityMiningMigration", () => {
 			await liquidityMining.startMigrationGracePeriod();
 			await liquidityMiningV2.addAdmin(migrator.address);
 			await migrator.migratePools();
-			await expectRevert(migrator.migratePools(), "pools have already been migrated");
+			await expectRevert(migrator.migratePools(), "Wrong state: should be MigratingPools");
 		});
 		it("should add pools from liquidityMininigV1", async () => {
 			await liquidityMining.addAdmin(migrator.address);
@@ -223,7 +223,7 @@ describe("LiquidityMiningMigration", () => {
 				expect(startBlockV2).bignumber.equal(startBlockV1);
 				expect(totalUsersBalanceV2).bignumber.equal(totalUsersBalanceV1);
 				const migrationState = await migrator.migrationState();
-				expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedPoolsMigration);
+				expect(migrationState.toNumber()).to.equal(MigrationStates.MigratingUsers);
 			}
 		});
 	});
@@ -233,10 +233,10 @@ describe("LiquidityMiningMigration", () => {
 			await expectRevert(migrator.migrateUsers(accounts, { from: account1 }), "unauthorized");
 		});
 		it("should fail migrating users if pools were not migrated", async () => {
-			await expectRevert(migrator.migrateUsers(accounts), "have to migrate pools first");
+			await expectRevert(migrator.migrateUsers(accounts), "Wrong state: should be MigratingUsers");
 		});
 		it("should fail finishing users migration if pools were not migrated", async () => {
-			await expectRevert(migrator.finishUsersMigration(), "have to migrate pools first");
+			await expectRevert(migrator.finishUsersMigration(), "Wrong state: should be MigratingUsers");
 		});
 		it("should only allow to migrate users by migrator contract", async () => {
 			await liquidityMining.addAdmin(migrator.address);
@@ -259,7 +259,7 @@ describe("LiquidityMiningMigration", () => {
 			await liquidityMiningV2.addAdmin(migrator.address);
 			await migrator.migratePools();
 			await migrator.finishUsersMigration();
-			await expectRevert(migrator.migrateUsers(accounts), "users have already been migrated");
+			await expectRevert(migrator.migrateUsers(accounts), "Wrong state: should be MigratingUsers");
 		});
 		it("should save migrated users", async () => {
 			await liquidityMining.addAdmin(migrator.address);
@@ -273,7 +273,7 @@ describe("LiquidityMiningMigration", () => {
 
 			await migrator.finishUsersMigration();
 			const migrationState = await migrator.migrationState();
-			expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedUsersMigration);
+			expect(migrationState.toNumber()).to.equal(MigrationStates.MigratingFunds);
 		});
 		it("should emit user migrated event", async () => {
 			await liquidityMining.addAdmin(migrator.address);
@@ -303,13 +303,13 @@ describe("LiquidityMiningMigration", () => {
 			await migrator.migrateUsers(accounts.slice(0, halfLength));
 
 			let migrationState = await migrator.migrationState();
-			expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedPoolsMigration);
+			expect(migrationState.toNumber()).to.equal(MigrationStates.MigratingUsers);
 
 			await migrator.migrateUsers(accounts.slice(-halfLength));
 
 			await migrator.finishUsersMigration();
 			migrationState = await migrator.migrationState();
-			expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedUsersMigration);
+			expect(migrationState.toNumber()).to.equal(MigrationStates.MigratingFunds);
 
 			for (let i = 0; i < tokens.length; i++) {
 				for (let j = 0; j < accountDeposits.length; j++) {
@@ -339,7 +339,7 @@ describe("LiquidityMiningMigration", () => {
 
 			await migrator.finishUsersMigration();
 			const migrationState = await migrator.migrationState();
-			expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedUsersMigration);
+			expect(migrationState.toNumber()).to.equal(MigrationStates.MigratingFunds);
 
 			for (let i = 0; i < tokens.length; i++) {
 				for (let j = 0; j < accountDeposits.length; j++) {
@@ -366,7 +366,7 @@ describe("LiquidityMiningMigration", () => {
 			await expectRevert(migrator.migrateFunds({ from: account1 }), "unauthorized");
 		});
 		it("should fail migrating funds if users were not migrated", async () => {
-			await expectRevert(migrator.migrateFunds(), "have to migrate users first");
+			await expectRevert(migrator.migrateFunds(), "Wrong state: should be MigratingFunds");
 		});
 		it("should only allow to migrate funds by migrator contract", async () => {
 			await liquidityMining.addAdmin(migrator.address);
@@ -394,7 +394,7 @@ describe("LiquidityMiningMigration", () => {
 			await migrator.migratePools();
 			await migrator.finishUsersMigration();
 			await migrator.migrateFunds();
-			await expectRevert(migrator.migrateFunds(), "funds have already been migrated");
+			await expectRevert(migrator.migrateFunds(), "Wrong state: should be MigratingFunds");
 		});
 		it("should fail if liquidity mining V2 is not initialized in liquidity mining V1", async () => {
 			await deployLiquidityMining();
@@ -441,7 +441,7 @@ describe("LiquidityMiningMigration", () => {
 			await migrator.migrateFunds();
 
 			const migrationState = await migrator.migrationState();
-			expect(migrationState.toNumber()).to.equal(MigrationStates.FinishedFundsMigration);
+			expect(migrationState.toNumber()).to.equal(MigrationStates.MigrationFinished);
 
 			let SOVBalanceV1After = await SOVToken.balanceOf(liquidityMining.address);
 			let SOVBalanceV2After = await SOVToken.balanceOf(liquidityMiningV2.address);
