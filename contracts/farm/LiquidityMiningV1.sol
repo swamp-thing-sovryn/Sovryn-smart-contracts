@@ -51,39 +51,12 @@ contract LiquidityMiningV1 is ILiquidityMiningV1, LiquidityMiningStorageV1 {
 	/**
 	 * @notice Initialize mining.
 	 *
-	 * @param _SOV The SOV token.
-	 * @param _rewardTokensPerBlock The number of reward tokens per block.
-	 * @param _startDelayBlocks The number of blocks should be passed to start
-	 *   mining.
-	 * @param _numberOfBonusBlocks The number of blocks when each block will
-	 *   be calculated as N blocks (BONUS_BLOCK_MULTIPLIER).
-	 * @param _lockedSOV The contract instance address of the lockedSOV vault.
-	 *   SOV rewards are not paid directly to liquidity providers. Instead they
-	 *   are deposited into a lockedSOV vault contract.
-	 * @param _unlockedImmediatelyPercent The % which determines how much will be unlocked immediately.
+	 * @param _liquidityMiningV2 The LiquidityMiningV2 contract address
 	 */
-	function initialize(
-		IERC20 _SOV,
-		uint256 _rewardTokensPerBlock,
-		uint256 _startDelayBlocks,
-		uint256 _numberOfBonusBlocks,
-		address _wrapper,
-		ILockedSOV _lockedSOV,
-		uint256 _unlockedImmediatelyPercent
-	) external onlyAuthorized {
+	function initialize(address _liquidityMiningV2) external onlyAuthorized {
 		/// @dev Non-idempotent function. Must be called just once.
-		require(address(SOV) == address(0), "Already initialized");
-		require(address(_SOV) != address(0), "Invalid token address");
-		require(_startDelayBlocks > 0, "Invalid start block");
-		require(_unlockedImmediatelyPercent < 10000, "Unlocked immediately percent has to be less than 10000.");
-
-		SOV = _SOV;
-		rewardTokensPerBlock = _rewardTokensPerBlock;
-		startBlock = block.number + _startDelayBlocks;
-		bonusEndBlock = startBlock + _numberOfBonusBlocks;
-		wrapper = _wrapper;
-		lockedSOV = _lockedSOV;
-		unlockedImmediatelyPercent = _unlockedImmediatelyPercent;
+		require(_liquidityMiningV2 != address(0), "Invalid address");
+		liquidityMiningV2 = _liquidityMiningV2;
 	}
 
 	/**
@@ -134,8 +107,8 @@ contract LiquidityMiningV1 is ILiquidityMiningV1, LiquidityMiningStorageV1 {
 	// TODO: this should only be used by the LiquidityMiningV2 contract??
 	/// @notice This function finishes the migration process disabling further withdrawals and claims
 	/// @dev migration grace period should have started before this function is called.
-	function finishMigrationGracePeriod() external onlyAuthorized {
-		require(migrationGracePeriodState >= MigrationGracePeriodStates.Started, "Migration hasn't started yet");
+	function finishMigrationGracePeriod() external onlyAuthorized onlyBeforeMigrationGracePeriodFinished {
+		require(migrationGracePeriodState == MigrationGracePeriodStates.Started, "Migration hasn't started yet");
 		migrationGracePeriodState = MigrationGracePeriodStates.Finished;
 	}
 
@@ -761,14 +734,6 @@ contract LiquidityMiningV1 is ILiquidityMiningV1, LiquidityMiningStorageV1 {
 			_accumulatedReward[i] = userInfoMap[i][_user].accumulatedReward;
 		}
 		return (_amount, _rewardDebt, _accumulatedReward);
-	}
-
-	/**
-	 * @notice set Liquidity Mining V2 contract address
-	 */
-	function setLiquidityMiningV2(address _liquidityMiningV2) external onlyAuthorized {
-		require(_liquidityMiningV2 != address(0), "Invalid address");
-		liquidityMiningV2 = _liquidityMiningV2;
 	}
 
 	/**

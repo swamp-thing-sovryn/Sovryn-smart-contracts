@@ -9,7 +9,7 @@ import "./ILiquidityMiningV1.sol";
 import "./ILiquidityMiningV2.sol";
 
 contract LMV1toLMV2Migrator is AdminRole {
-    using SafeMath for uint256;
+	using SafeMath for uint256;
 	using SafeERC20 for IERC20;
 	enum MigrationStates {
 		None,

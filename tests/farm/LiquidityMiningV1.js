@@ -7,9 +7,11 @@ const TOTAL_SUPPLY = etherMantissa(1000000000);
 
 const TestToken = artifacts.require("TestToken");
 const LiquidityMiningConfigToken = artifacts.require("LiquidityMiningConfigToken");
-const LiquidityMiningV1Logic = artifacts.require("LiquidityMiningV1Mockup");
-const LiquidityMiningLogic = artifacts.require("LiquidityMiningV1Mockup");
+const LiquidityMiningLogicV1 = artifacts.require("LiquidityMiningV1Mockup");
+const LiquidityMiningLogic = artifacts.require("LiquidityMiningMockup");
 const LiquidityMiningProxy = artifacts.require("LiquidityMiningProxy");
+const LiquidityMiningLogicV2 = artifacts.require("LiquidityMiningMockupV2");
+const LiquidityMiningProxyV2 = artifacts.require("LiquidityMiningProxyV2");
 const TestLockedSOV = artifacts.require("LockedSOVMockup");
 const Wrapper = artifacts.require("RBTCWrapperProxyMockup");
 
@@ -33,7 +35,7 @@ describe("LiquidityMining", () => {
 	let accounts;
 	let root, account1, account2, account3, account4;
 	let SOVToken, token1, token2, token3, liquidityMiningConfigToken;
-	let liquidityMining, wrapper;
+	let liquidityMining, liquidityMiningProxy, liquidityMiningV2, liquidityMiningProxyV2, wrapper;
 	let lockedSOVAdmins, lockedSOV;
 
 	before(async () => {
@@ -61,6 +63,12 @@ describe("LiquidityMining", () => {
 			lockedSOV.address,
 			unlockedImmediatelyPercent
 		);
+
+		await upgradeLiquidityMining();
+
+		await deployLiquidityMiningV2();
+
+		await liquidityMining.initialize(liquidityMiningV2.address);
 	});
 
 	describe("initialize", () => {
@@ -137,6 +145,16 @@ describe("LiquidityMining", () => {
 		});
 
 		it("fails if already initialized", async () => {
+			await deployLiquidityMining();
+			await liquidityMining.initialize(
+				SOVToken.address,
+				rewardTokensPerBlock,
+				startDelayBlocks,
+				numberOfBonusBlocks,
+				wrapper.address,
+				lockedSOV.address,
+				unlockedImmediatelyPercent
+			);
 			await expectRevert(
 				liquidityMining.initialize(
 					SOVToken.address,
@@ -150,7 +168,6 @@ describe("LiquidityMining", () => {
 				"Already initialized"
 			);
 		});
-
 		it("fails if the 0 address is passed as token address", async () => {
 			await deployLiquidityMining();
 			await expectRevert(
@@ -165,6 +182,20 @@ describe("LiquidityMining", () => {
 				),
 				"Invalid token address"
 			);
+		});
+		it("fails if the 0 address is passed as LiquidityMiningV2 address", async () => {
+			await deployLiquidityMining();
+			await liquidityMining.initialize(
+				SOVToken.address,
+				rewardTokensPerBlock,
+				startDelayBlocks,
+				numberOfBonusBlocks,
+				wrapper.address,
+				lockedSOV.address,
+				unlockedImmediatelyPercent
+			);
+			await upgradeLiquidityMining();
+			await expectRevert(liquidityMining.initialize(ZERO_ADDRESS), "Invalid address");
 		});
 
 		it("fails if unlockedImmediatelyPercent >= 10000", async () => {
@@ -1091,8 +1122,8 @@ describe("LiquidityMining", () => {
 			expect(estimatedReward).bignumber.equal(expectedReward);
 		});
 
-		it("check calculation for 1 user, period is 40 blocks", async () => {
-			let blocks = new BN(40);
+		it("check calculation for 1 user, period is 30 blocks", async () => {
+			let blocks = new BN(30);
 			let duration = secondsPerBlock.mul(blocks);
 
 			let estimatedReward = await liquidityMining.getEstimatedReward(token1.address, amount3, duration);
@@ -1817,6 +1848,16 @@ describe("LiquidityMining", () => {
 				await expectRevert(liquidityMining.finishMigrationGracePeriod(), "Migration hasn't started yet");
 			});
 
+			it("should fail if grace period has already finished", async () => {
+				await liquidityMining.startMigrationGracePeriod();
+				await liquidityMining.finishMigrationGracePeriod();
+
+				const migrationGracePeriodState = await liquidityMining.migrationGracePeriodState();
+				expect(migrationGracePeriodState.toNumber()).to.equal(MigrationGracePeriodStates.Finished);
+
+				await expectRevert(liquidityMining.finishMigrationGracePeriod(), "Forbidden: contract deprecated");
+			});
+
 			it("should properly finish grace period", async () => {
 				await liquidityMining.startMigrationGracePeriod();
 				// check that the grace period is started
@@ -1857,12 +1898,25 @@ describe("LiquidityMining", () => {
 	});
 
 	async function deployLiquidityMining() {
-		let liquidityMiningV1Logic = await LiquidityMiningV1Logic.new();
-		let liquidityMiningProxy = await LiquidityMiningProxy.new();
-		await liquidityMiningProxy.setImplementation(liquidityMiningV1Logic.address);
-		liquidityMining = await LiquidityMiningV1Logic.at(liquidityMiningProxy.address);
+		let liquidityMiningLogic = await LiquidityMiningLogic.new();
+		liquidityMiningProxy = await LiquidityMiningProxy.new();
+		await liquidityMiningProxy.setImplementation(liquidityMiningLogic.address);
+		liquidityMining = await LiquidityMiningLogic.at(liquidityMiningProxy.address);
 
 		wrapper = await Wrapper.new(liquidityMining.address);
+	}
+
+	async function upgradeLiquidityMining() {
+		let liquidityMiningLogicV1 = await LiquidityMiningLogicV1.new();
+		await liquidityMiningProxy.setImplementation(liquidityMiningLogicV1.address);
+		liquidityMining = await LiquidityMiningLogicV1.at(liquidityMiningProxy.address);
+	}
+
+	async function deployLiquidityMiningV2() {
+		let liquidityMiningLogicV2 = await LiquidityMiningLogicV2.new();
+		liquidityMiningProxyV2 = await LiquidityMiningProxyV2.new();
+		await liquidityMiningProxyV2.setImplementation(liquidityMiningLogicV2.address);
+		liquidityMiningV2 = await LiquidityMiningLogicV2.at(liquidityMiningProxyV2.address);
 	}
 
 	async function checkBonusPeriodHasNotEnded() {
@@ -1977,7 +2031,7 @@ describe("Contract upgrade", async () => {
 	}
 
 	async function upgradeLiquidityMining() {
-		let liquidityMiningV1Logic = await LiquidityMiningV1Logic.new();
-		await liquidityMiningProxy.setImplementation(liquidityMiningV1Logic.address);
+		let liquidityMiningLogicV1 = await LiquidityMiningLogicV1.new();
+		await liquidityMiningProxy.setImplementation(liquidityMiningLogicV1.address);
 	}
 });
