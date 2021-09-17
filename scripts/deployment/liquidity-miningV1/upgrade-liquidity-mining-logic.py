@@ -45,3 +45,5 @@ def upgradeLiquidityMiningLogic():
     tx = multisig.submitTransaction(liquidityMiningProxy.address,0,data)
     txId = tx.events["Submission"]["transactionId"]
     print("txid",txId)
+
+

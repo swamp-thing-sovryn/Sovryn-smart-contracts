@@ -15,10 +15,9 @@ def main():
     loadConfig()
 
     #call the function you want here
-    # addTestETHPoolTokenToLMV2()
-    # addETHPoolTokenToLMV2()
+ 
     # updateLMV2Config()
-    #addFISHtokenToLMV2()
+
 
     # checkLMV2()
     updateAllPoolsLMV2()
@@ -46,45 +45,6 @@ def loadConfig():
         raise Exception("Network not supported.")
     contracts = json.load(configFile)
 
-def addTestETHPoolTokenToLMV2():
-    multisig = Contract.from_abi("MultiSig", address=contracts['multisig'], abi=MultiSigWallet.abi, owner=acct)
-    lm = Contract.from_abi("LiquidityMiningV2", address = contracts['LiquidityMiningProxyV2'], abi = LiquidityMiningV2.abi, owner = acct)
-    data = lm.add.encode_input(contracts['(WR)BTC/ETH'],[contracts['SOV']],[1],False)
-
-    tx = multisig.submitTransaction(lm.address,0,data)
-    txId = tx.events["Submission"]["transactionId"]
-    print("txid",txId)
-
-def addETHPoolTokenToLMV2():
-    multisig = Contract.from_abi("MultiSig", address=contracts['multisig'], abi=MultiSigWallet.abi, owner=acct)
-    lm = Contract.from_abi("LiquidityMiningV2", address = contracts['LiquidityMiningProxyV2'], abi = LiquidityMiningV2.abi, owner = acct)
-
-    MAX_ALLOCATION_POINT = 100000 * 1000 # 100 M
-    ALLOCATION_POINT_BTC_SOV = 40000 # (WR)BTC/SOV
-    ALLOCATION_POINT_BTC_ETH = 1 # or 30000 (WR)BTC/ETH
-    ALLOCATION_POINT_DEFAULT = 1 # (WR)BTC/USDT1 | (WR)BTC/USDT2 | (WR)BTC/DOC1 | (WR)BTC/DOC2 | (WR)BTC/BPRO1 | (WR)BTC/BPRO2
-    ALLOCATION_POINT_CONFIG_TOKEN = MAX_ALLOCATION_POINT - ALLOCATION_POINT_BTC_SOV - ALLOCATION_POINT_BTC_ETH - ALLOCATION_POINT_DEFAULT * 6
-
-    print("ALLOCATION_POINT_CONFIG_TOKEN: ", ALLOCATION_POINT_CONFIG_TOKEN)
-
-    data = lm.add.encode_input(contracts['(WR)BTC/ETH'],ALLOCATION_POINT_BTC_ETH,False)
-    tx = multisig.submitTransaction(lm.address,0,data)
-    txId = tx.events["Submission"]["transactionId"]
-    print("txid",txId)
-
-    data = lm.update.encode_input(contracts['LiquidityMiningConfigToken'],[contracts['SOV']],[ALLOCATION_POINT_CONFIG_TOKEN],True)
-    tx = multisig.submitTransaction(lm.address,0,data)
-    txId = tx.events["Submission"]["transactionId"]
-    print("txid",txId)
-
-def addFISHtokenToLMV2():
-    multisig = Contract.from_abi("MultiSig", address=contracts['multisig'], abi=MultiSigWallet.abi, owner=acct)
-    lm = Contract.from_abi("LiquidityMiningV2", address = contracts['LiquidityMiningProxyV2'], abi = LiquidityMiningV2.abi, owner = acct)
-
-    data = lm.add.encode_input(contracts['(WR)BTC/FISH'],[contracts['SOV']],[1],False)
-    tx = multisig.submitTransaction(lm.address,0,data)
-    txId = tx.events["Submission"]["transactionId"]
-    print("txid",txId)
 
 def updateLMV2Config():
     multisig = Contract.from_abi("MultiSig", address=contracts['multisig'], abi=MultiSigWallet.abi, owner=acct)

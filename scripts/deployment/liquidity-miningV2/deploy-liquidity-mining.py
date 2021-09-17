@@ -60,8 +60,6 @@ def main():
     # The % (in Basis Point) which determines how much will be unlocked immediately.
     # 10000 is 100%
     unlockedImmediatelyPercent = 0 # 0%
-    
-    liquidityMiningV2.initialize(wrapper,contracts['LiquidityMiningProxy'],contracts['SOV'])
 
     #Reward transfer logic
 
