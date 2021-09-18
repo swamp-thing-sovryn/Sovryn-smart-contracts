@@ -12,4 +12,7 @@ contract LiquidityMiningStorageV1 is LiquidityMiningStorage {
 
 	/// @dev Represents migration grace period state
 	MigrationGracePeriodStates public migrationGracePeriodState;
+
+	/// @dev liquidity mining V2 contract address
+	address public liquidityMiningV2;
 }

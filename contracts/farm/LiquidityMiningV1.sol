@@ -5,9 +5,9 @@ import "../openzeppelin/ERC20.sol";
 import "../openzeppelin/SafeERC20.sol";
 import "../openzeppelin/SafeMath.sol";
 import "./LiquidityMiningStorageV1.sol";
-import "./ILiquidityMining.sol";
+import "./ILiquidityMiningV1.sol";
 
-contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
+contract LiquidityMiningV1 is ILiquidityMiningV1, LiquidityMiningStorageV1 {
 	using SafeMath for uint256;
 	using SafeERC20 for IERC20;
 
@@ -41,44 +41,22 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 		_;
 	}
 
+	modifier onlyAfterMigrationFinished() {
+		require(migrationGracePeriodState == MigrationGracePeriodStates.Finished, "Forbidden: migration is not over yet");
+		_;
+	}
+
 	/* Functions */
 
 	/**
 	 * @notice Initialize mining.
 	 *
-	 * @param _SOV The SOV token.
-	 * @param _rewardTokensPerBlock The number of reward tokens per block.
-	 * @param _startDelayBlocks The number of blocks should be passed to start
-	 *   mining.
-	 * @param _numberOfBonusBlocks The number of blocks when each block will
-	 *   be calculated as N blocks (BONUS_BLOCK_MULTIPLIER).
-	 * @param _lockedSOV The contract instance address of the lockedSOV vault.
-	 *   SOV rewards are not paid directly to liquidity providers. Instead they
-	 *   are deposited into a lockedSOV vault contract.
-	 * @param _unlockedImmediatelyPercent The % which determines how much will be unlocked immediately.
+	 * @param _liquidityMiningV2 The LiquidityMiningV2 contract address
 	 */
-	function initialize(
-		IERC20 _SOV,
-		uint256 _rewardTokensPerBlock,
-		uint256 _startDelayBlocks,
-		uint256 _numberOfBonusBlocks,
-		address _wrapper,
-		ILockedSOV _lockedSOV,
-		uint256 _unlockedImmediatelyPercent
-	) external onlyAuthorized {
+	function initialize(address _liquidityMiningV2) external onlyAuthorized {
 		/// @dev Non-idempotent function. Must be called just once.
-		require(address(SOV) == address(0), "Already initialized");
-		require(address(_SOV) != address(0), "Invalid token address");
-		require(_startDelayBlocks > 0, "Invalid start block");
-		require(_unlockedImmediatelyPercent < 10000, "Unlocked immediately percent has to be less than 10000.");
-
-		SOV = _SOV;
-		rewardTokensPerBlock = _rewardTokensPerBlock;
-		startBlock = block.number + _startDelayBlocks;
-		bonusEndBlock = startBlock + _numberOfBonusBlocks;
-		wrapper = _wrapper;
-		lockedSOV = _lockedSOV;
-		unlockedImmediatelyPercent = _unlockedImmediatelyPercent;
+		require(_liquidityMiningV2 != address(0), "Invalid address");
+		liquidityMiningV2 = _liquidityMiningV2;
 	}
 
 	/**
@@ -141,7 +119,7 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 	 * @param _receiver The address of the SOV receiver.
 	 * @param _amount The amount to be transferred.
 	 * */
-	function transferSOV(address _receiver, uint256 _amount) external onlyAuthorized {
+	function transferSOV(address _receiver, uint256 _amount) public onlyAuthorized {
 		require(_receiver != address(0), "Receiver address invalid");
 		require(_amount != 0, "Amount invalid");
 
@@ -704,5 +682,86 @@ contract LiquidityMiningV1 is ILiquidityMining, LiquidityMiningStorageV1 {
 	function getUserPoolTokenBalance(address _poolToken, address _user) external view returns (uint256) {
 		UserInfo memory ui = getUserInfo(_poolToken, _user);
 		return ui.amount;
+	}
+
+	/**
+	 * @notice returns arrays with all the pools on the contract
+	 */
+	function getPoolInfoListArray()
+		external
+		view
+		returns (
+			address[] memory _poolToken,
+			uint96[] memory _allocationPoints,
+			uint256[] memory _lastRewardBlock,
+			uint256[] memory _accumulatedRewardPerShare
+		)
+	{
+		uint256 length = poolInfoList.length;
+		_poolToken = new address[](length);
+		_allocationPoints = new uint96[](length);
+		_lastRewardBlock = new uint256[](length);
+		_accumulatedRewardPerShare = new uint256[](length);
+		for (uint256 i = 0; i < length; i++) {
+			_poolToken[i] = address(poolInfoList[i].poolToken);
+			_allocationPoints[i] = poolInfoList[i].allocationPoint;
+			_lastRewardBlock[i] = poolInfoList[i].lastRewardBlock;
+			_accumulatedRewardPerShare[i] = poolInfoList[i].accumulatedRewardPerShare;
+		}
+		return (_poolToken, _allocationPoints, _lastRewardBlock, _accumulatedRewardPerShare);
+	}
+
+	/**
+	 * @notice returns all pools that a user has on the contract, the poolId it's the index of arrays
+	 * @param _user the address of the user
+	 */
+	function getUserInfoListArray(address _user)
+		external
+		view
+		returns (
+			uint256[] memory _amount,
+			uint256[] memory _rewardDebt,
+			uint256[] memory _accumulatedReward
+		)
+	{
+		uint256 length = poolInfoList.length;
+		_amount = new uint256[](length);
+		_rewardDebt = new uint256[](length);
+		_accumulatedReward = new uint256[](length);
+		for (uint256 i = 0; i < length; i++) {
+			_amount[i] = userInfoMap[i][_user].amount;
+			_rewardDebt[i] = userInfoMap[i][_user].rewardDebt;
+			_accumulatedReward[i] = userInfoMap[i][_user].accumulatedReward;
+		}
+		return (_amount, _rewardDebt, _accumulatedReward);
+	}
+
+	/**
+	 * @notice send all funds from this contract to LiquidityMiningV2
+	 */
+	function migrateFunds() external onlyAuthorized onlyAfterMigrationFinished {
+		require(liquidityMiningV2 != address(0), "Address not initialized");
+		uint256 SOVBalance = SOV.balanceOf(address(this));
+		transferSOV(liquidityMiningV2, SOVBalance);
+		uint256 length = poolInfoList.length;
+		for (uint256 i = 0; i < length; i++) {
+			IERC20 poolToken = poolInfoList[i].poolToken;
+			uint256 balancePoolToken = poolToken.balanceOf(address(this));
+			poolToken.safeTransfer(liquidityMiningV2, balancePoolToken);
+		}
+	}
+
+	/**
+	 * @notice return reward token total users balance
+	 */
+	function getTotalUsersBalance() external view returns (uint256) {
+		return totalUsersBalance;
+	}
+
+	/**
+	 * @notice return reward token start block
+	 */
+	function getStartBlock() external view returns (uint256) {
+		return startBlock;
 	}
 }

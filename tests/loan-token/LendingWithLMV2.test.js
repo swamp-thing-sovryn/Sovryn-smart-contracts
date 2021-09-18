@@ -186,7 +186,7 @@ contract("LoanTokenLogicLM", (accounts) => {
 		rewardTransferLogic = await LockedSOVRewardTransferLogic.new();
 		await rewardTransferLogic.initialize(lockedSOV.address, new BN(1000));
 		//dummy settings
-		await liquidityMining.initialize(ZERO_ADDRESS);
+		await liquidityMining.initialize(ZERO_ADDRESS, liquidityMiningLogic.address, SOVToken.address);
 	}
 
 	async function deployProtocol() {

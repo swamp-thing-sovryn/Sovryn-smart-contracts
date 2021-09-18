@@ -60,34 +60,14 @@ def main():
     # The % (in Basis Point) which determines how much will be unlocked immediately.
     # 10000 is 100%
     unlockedImmediatelyPercent = 0 # 0%
-    
-    liquidityMiningV2.initialize(wrapper)
 
     #Reward transfer logic
 
     SOVRewardTransferLogic = acct.deploy(LockedSOVRewardTransferLogic)
     SOVRewardTransferLogic.initialize(contracts['LockedSOV'],unlockedImmediatelyPercent)
-
-    # TODO prepare pool tokens list
-    poolTokens = [contracts['(WR)BTC/SOV'], contracts['LiquidityMiningConfigToken']]
-    # we need to multiply by 1000 to have 100 M
-    MAX_ALLOCATION_POINT = 100000 * 1000 # 100 M
-    # we don't need 10**18 here, it's just a proportion between tokens
-    ALLOCATION_POINT_SOV_BTC = 40000 # 40 K
-    # token weight = allocationPoint / SUM of allocationPoints for all pool tokens
-    withUpdate = False # can be False if we adding pool tokens before mining started
     
     #add reward tokens
     liquidityMiningV2.addRewardToken(contracts['SOV'],rewardTokensPerBlock,startDelayBlocks,SOVRewardTransferLogic.address)
-
-    #add pools
-    rewardTokensPool = [[contracts['SOV']],[contracts['SOV']]]
-
-    allocationPointsPool = [[ALLOCATION_POINT_SOV_BTC],[MAX_ALLOCATION_POINT - ALLOCATION_POINT_SOV_BTC]]
-    
-    for i in range(0,len(poolTokens)):
-        print('adding pool', i)
-        liquidityMiningV2.add(poolTokens[i], rewardTokensPool[i], allocationPointsPool[i], withUpdate)
 
     liquidityMiningProxyV2.addAdmin(multisig)
     liquidityMiningProxyV2.setProxyOwner(multisig)

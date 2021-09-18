@@ -76,4 +76,9 @@ contract LiquidityMiningStorageV2 is AdminRole {
 
 	// Info of each user that stakes LP tokens.
 	mapping(uint256 => mapping(address => UserInfo)) public userInfoMap;
+
+	//LiquidityMiningV1 to LiquidityMiningV2 migrator contract address
+	address public migrator;
+
+	bool public migrationFinished;
 }

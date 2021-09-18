@@ -5,13 +5,13 @@ import "../openzeppelin/ERC20.sol";
 import "../openzeppelin/SafeERC20.sol";
 import "../openzeppelin/SafeMath.sol";
 import "./LiquidityMiningStorageV2.sol";
-import "./ILiquidityMining.sol";
 import "./IRewardTransferLogic.sol";
+import "./ILiquidityMiningV2.sol";
 
 /// @notice This contract is a new liquidity mining version that let's the user
 ///         to earn multiple reward tokens by staking LP tokens as opposed to the
 /// 				previous one that only rewarded SOV
-contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
+contract LiquidityMiningV2 is ILiquidityMiningV2, LiquidityMiningStorageV2 {
 	using SafeMath for uint256;
 	using SafeERC20 for IERC20;
 
@@ -49,9 +49,16 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	/**
 	 * @notice Initialize mining.
 	 */
-	function initialize(address _wrapper) external onlyAuthorized {
+	function initialize(
+		address _wrapper,
+		address _migrator,
+		IERC20 _SOV
+	) external onlyAuthorized {
 		/// @dev Non-idempotent function. Must be called just once.
+		require(_migrator != address(0), "invalid contract address");
+		require(address(_SOV) != address(0), "invalid token address");
 		wrapper = _wrapper;
+		migrator = _migrator;
 	}
 
 	/**
@@ -484,6 +491,7 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 		uint256 _amount,
 		address _user
 	) external {
+		require(migrationFinished, "Migration is not over yet");
 		_deposit(_poolToken, _amount, _user, false);
 	}
 
@@ -782,7 +790,7 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	 * @param _poolToken the address of pool token
 	 * @param _rewardToken the address of reward token
 	 */
-	function getPoolReward(address _poolToken, address _rewardToken) external view returns (PoolInfoRewardToken memory) {
+	function getPoolReward(address _poolToken, address _rewardToken) public view returns (PoolInfoRewardToken memory) {
 		uint256 poolId = _getPoolId(_poolToken);
 		return poolInfoRewardTokensMap[poolId][_rewardToken];
 	}
@@ -924,5 +932,51 @@ contract LiquidityMiningV2 is ILiquidityMining, LiquidityMiningStorageV2 {
 	function getUserPoolTokenBalance(address _poolToken, address _user) external view returns (uint256) {
 		uint256 poolId = _getPoolId(_poolToken);
 		return userInfoMap[poolId][_user].amount;
+	}
+
+	function setPoolInfoRewardToken(
+		address _poolToken,
+		address _rewardToken,
+		uint256 _lastRewardBlock,
+		uint256 _accumulatedRewardPerShare
+	) external onlyAuthorized {
+		require(msg.sender == migrator, "only allowed to migrator contract");
+		uint256 poolId = _getPoolId(_poolToken);
+		PoolInfoRewardToken storage poolInfoRewardToken = poolInfoRewardTokensMap[poolId][_rewardToken];
+		poolInfoRewardToken.lastRewardBlock = _lastRewardBlock;
+		poolInfoRewardToken.accumulatedRewardPerShare = _accumulatedRewardPerShare;
+	}
+
+	function setRewardToken(
+		address _rewardToken,
+		uint256 _startBlock,
+		uint256 _totalUsersBalance
+	) external onlyAuthorized {
+		require(msg.sender == migrator, "only allowed to migrator contract");
+		RewardToken storage rewardToken = rewardTokensMap[_rewardToken];
+		rewardToken.startBlock = _startBlock;
+		rewardToken.totalUsersBalance = _totalUsersBalance;
+	}
+
+	function setUserInfo(
+		uint256 _poolId,
+		address _user,
+		address _rewardToken,
+		uint256 _amount,
+		uint256 _rewardDebt,
+		uint256 _accumulatedReward
+	) external onlyAuthorized {
+		require(msg.sender == migrator, "only allowed to migrator contract");
+		UserInfo storage userInfo = userInfoMap[_poolId][_user];
+		userInfo.amount = _amount;
+		userInfo.rewards[_rewardToken] = UserReward(_rewardDebt, _accumulatedReward);
+	}
+
+	/**
+	 * @notice finish migration
+	 */
+	function finishMigration() external onlyAuthorized {
+		require(msg.sender == migrator, "only allowed to migrator contract");
+		migrationFinished = true;
 	}
 }
